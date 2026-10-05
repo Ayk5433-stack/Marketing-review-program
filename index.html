@@ -285,7 +285,6 @@ const FIELD_LABEL = {
   ub_url: 'Unbranded video link', ub_status: 'Unbranded video status', ub_note: 'Unbranded video note', ub_quality: 'Unbranded video quality',
   video_url: 'Physical video link', video_status: 'Physical video status', video_note: 'Physical video note', video_quality: 'Physical video quality',
   yt_url: 'YouTube link', yt_status: 'YouTube status', yt_note: 'YouTube note', yt_quality: 'YouTube quality',
-  social_last_post: 'Last social post', social_platform: 'Social platform', social_note: 'Social note',
   name: 'Name', category: 'Product category', on_price_sheet: 'On price sheet'
 };
 let CUT = new Date(new Date().getFullYear() - 3, 0, 1);
@@ -416,7 +415,7 @@ function channelRef(h) {
 }
 
 /* =============================== item editing rules =============================== */
-const EDITABLE = new Set(['name', 'category', 'on_price_sheet', 'social_last_post', 'social_platform', 'social_note']);
+const EDITABLE = new Set(['name', 'category', 'on_price_sheet']);
 ['photo', 'video', 'ub', 'yt'].forEach(a => ['_url', '_status', '_note'].forEach(f => EDITABLE.add(a + f)));
 ['video', 'ub', 'yt'].forEach(a => EDITABLE.add(a + '_quality'));
 const YT_META_KEYS = ['yt_title', 'yt_channel', 'yt_published', 'yt_definition', 'yt_duration', 'yt_views'];
@@ -643,8 +642,7 @@ const SHEET_COLS = [
   ['photo_url', 'Photo Link'], ['photo_status', 'Photo Status'], ['photo_note', 'Photo Note'],
   ['video_url', 'Physical Video Link'], ['video_status', 'Physical Video Status'], ['video_note', 'Physical Video Note'], ['video_quality', 'Physical Video Quality'],
   ['ub_url', 'Unbranded Video Link'], ['ub_status', 'Unbranded Video Status'], ['ub_note', 'Unbranded Video Note'], ['ub_quality', 'Unbranded Video Quality'],
-  ['yt_url', 'YouTube Link'], ['yt_status', 'YouTube Status'], ['yt_note', 'YouTube Note'], ['yt_quality', 'YouTube Quality'],
-  ['social_last_post', 'Last Social Post'], ['social_platform', 'Social Platform'], ['social_note', 'Social Note']
+  ['yt_url', 'YouTube Link'], ['yt_status', 'YouTube Status'], ['yt_note', 'YouTube Note'], ['yt_quality', 'YouTube Quality']
 ];
 const SHEET_KEY = {};
 SHEET_COLS.forEach(c => { SHEET_KEY[c[0]] = c[0]; SHEET_KEY[c[1].toLowerCase()] = c[0]; });
@@ -677,6 +675,7 @@ function parseWorkbook(wb, fileName) {
     if (SHEET_KEY[l]) return { key: SHEET_KEY[l] };
     if (OLD_4K[l]) return { key: OLD_4K[l], fourK: true };
     if (/\(auto\)\s*$/i.test(t)) return null;           // the program fills these in itself
+    if (/^(last social post|social platform|social note)$/i.test(t)) return null;   // social tracking was removed
     return { extra: t };
   });
   const items = [], seen = {}, extraCols = new Set();
@@ -821,8 +820,7 @@ const FILTERS = [
   ['not4k', 'Below 4K (720p or 1080p)', it => ['video', 'ub', 'yt'].some(a => it[a + '_url'] && (it[a + '_quality'] === '720p' || it[a + '_quality'] === '1080p'))],
   ['q720', 'Has a 720p video', it => ['video', 'ub', 'yt'].some(a => it[a + '_url'] && it[a + '_quality'] === '720p')],
   ['unknown4k', 'Video quality not set yet', it => ['video', 'ub', 'yt'].some(a => it[a + '_url'] && !it[a + '_quality'])],
-  ['link_updated', 'Links changed in the last 14 days', it => ASSETS.some(a => recent(it[a.k + '_link_updated_at'], 14))],
-  ['never_posted', 'Never posted on social', it => !it.social_last_post]
+  ['link_updated', 'Links changed in the last 14 days', it => ASSETS.some(a => recent(it[a.k + '_link_updated_at'], 14))]
 ];
 function recent(at, days) { if (!at) return false; const d = new Date(at); return !isNaN(d) && Date.now() - d < days * 864e5; }
 const FMAP = Object.fromEntries(FILTERS.map(f => [f[0], f]));
@@ -978,7 +976,7 @@ function viewDash() {
     '<span><i class="dot d-exp"></i>Expired (YouTube only)</span></div>';
   h += '<div class="small muted">Click any segment to see those items.</div></div></div></div>';
 
-  const cards = ['attention', 'unreviewed', 'review_due', 'yt_expired', 'missing_both', 'photo_missing', 'video_missing', 'ub_missing', 'yt_missing', 'photo_bad', 'video_bad', 'ub_bad', 'yt_bad', 'unknown4k', 'never_posted'];
+  const cards = ['attention', 'unreviewed', 'review_due', 'yt_expired', 'missing_both', 'photo_missing', 'video_missing', 'ub_missing', 'yt_missing', 'photo_bad', 'video_bad', 'ub_bad', 'yt_bad', 'unknown4k', 'link_updated'];
   h += '<div class="card"><h2 class="sec">Work lists</h2><div class="lists">';
   cards.forEach(id => {
     const n = base.filter(FMAP[id][2]).length;
@@ -1015,13 +1013,13 @@ function viewItems() {
   if (S.layout === 'grid') {
     h += '<div class="grid ' + S.size + '">' + shown.map(tile).join('') + '</div>';
   } else {
-    h += '<div class="tablewrap"><table><thead><tr><th></th><th>Item #</th><th>Name</th><th>Category</th>' + ASSETS.map(a => '<th>' + a.label + '</th>').join('') + '<th>YT uploaded</th><th>Quality (V / U / Y)</th><th>Last social post</th></tr></thead><tbody>' +
+    h += '<div class="tablewrap"><table><thead><tr><th></th><th>Item #</th><th>Name</th><th>Category</th>' + ASSETS.map(a => '<th>' + a.label + '</th>').join('') + '<th>YT uploaded</th><th>YT channel</th><th>Quality (V / U / Y)</th></tr></thead><tbody>' +
       shown.map(it => {
         const th = thumbOf(it);
         return '<tr class="click" data-act="open" data-no="' + esc(it.item_no) + '"><td>' + (th ? '<img class="mini" loading="lazy" alt="" src="' + esc(th) + '" onerror="this.style.visibility=\'hidden\'">' : '<div class="mini"></div>') + '</td>' +
           '<td class="mono">' + esc(it.item_no) + '</td><td>' + esc(it.name) + '</td><td>' + esc(it.category) + '</td>' +
           ASSETS.map(a => '<td>' + chip(eff(it, a.k)) + '</td>').join('') +
-          '<td>' + day(it.yt_published) + '</td><td>' + ['video', 'ub', 'yt'].map(a => esc(it[a + '_quality'] || '–')).join(' / ') + '</td><td>' + day(it.social_last_post) + '</td></tr>';
+          '<td>' + day(it.yt_published) + '</td><td>' + esc(it.yt_channel || '–') + '</td><td>' + ['video', 'ub', 'yt'].map(a => esc(it[a + '_quality'] || '–')).join(' / ') + '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
   if (list.length > shown.length) h += '<div class="more"><button data-act="more">Show all ' + nf(list.length) + '</button></div>';
@@ -1043,19 +1041,22 @@ function navButtons(no) {
     '<button class="bigbtn pri" data-act="next"' + (S.qi < S.queue.length - 1 ? '' : ' disabled') + '>Next ›</button></div>';
 }
 function profileSummary(it) {
-  return ASSETS.map(a => { const e = eff(it, a.k); return '<button data-act="jump" data-k="' + a.k + '"><i class="dot d-' + CLS[e] + '"></i>' + a.label + ': <b>' + esc(e) + '</b></button>'; }).join('') +
-    '<button data-act="jump" data-k="social"><i class="dot ' + (it.social_last_post ? 'd-ok' : 'd-miss') + '"></i>Social: <b>' + (it.social_last_post ? 'posted ' + day(it.social_last_post) : 'never logged') + '</b></button>';
+  return ASSETS.map(a => { const e = eff(it, a.k); return '<button data-act="jump" data-k="' + a.k + '"><i class="dot d-' + CLS[e] + '"></i>' + a.label + ': <b>' + esc(e) + '</b></button>'; }).join('');
 }
 function profileFacts(it) {
   const q = a => it[a + '_url'] ? esc(it[a + '_quality'] || 'quality not set') : '–';
+  const pending = it.yt_url && !it.yt_published ? '<i class="muted">fills in on the next YouTube refresh</i>' : '–';
   const f = [
-    ['YouTube upload', it.yt_published ? day(it.yt_published) + (it.yt_channel ? ' · ' + esc(it.yt_channel) : '') : '–'],
+    ['YouTube title', it.yt_title ? esc(it.yt_title) : pending, true],
+    ['YouTube uploaded', it.yt_published ? day(it.yt_published) : pending],
+    ['YouTube channel', it.yt_channel ? esc(it.yt_channel) : pending],
     ['YouTube quality', it.yt_url ? q('yt') + (it.yt_definition ? ' · YouTube says ' + esc(it.yt_definition) : '') : '–'],
     ['Physical video', q('video')],
     ['Unbranded video', q('ub')],
-    ['Last change', it.updated_at ? day(it.updated_at) : '–']
+    ['Last change', it.updated_at ? day(it.updated_at) : '–'],
+    ['YouTube details checked', S.settings.last_refresh ? day(S.settings.last_refresh) : 'not yet']
   ];
-  return f.map(x => '<div><span>' + x[0] + '</span>' + x[1] + '</div>').join('');
+  return f.map(x => '<div' + (x[2] ? ' style="grid-column:1/-1"' : '') + '><span>' + x[0] + '</span>' + x[1] + '</div>').join('');
 }
 function viewItem() {
   if (!S.queue.length) return '<div class="card">No item selected.</div>';
@@ -1073,8 +1074,7 @@ function viewItem() {
     '<div class="psum" id="psum">' + profileSummary(it) + '</div>' +
     '<div class="pfacts" id="pfacts">' + profileFacts(it) + '</div></div>' +
     navButtons(it.item_no) + '</div>';
-  h += '<div class="assets">' + ASSETS.map(a => '<div class="card asset" id="card-' + a.k + '">' + assetInner(it, a) + '</div>').join('') +
-    '<div class="card asset" id="card-social">' + socialInner(it) + '</div></div>';
+  h += '<div class="assets">' + ASSETS.map(a => '<div class="card asset" id="card-' + a.k + '">' + assetInner(it, a) + '</div>').join('') + '</div>';
   const ex = it.extra && typeof it.extra === 'object' ? Object.entries(it.extra).filter(x => String(x[1]).trim()) : [];
   if (ex.length) h += '<div class="card"><h2 class="sec">Price list details</h2><dl class="extra">' + ex.map(x => '<dt>' + esc(x[0]) + '</dt><dd>' + esc(x[1]) + '</dd>').join('') + '</dl></div>';
   h += '<div class="card"><div class="row"><h2 class="sec grow" style="margin:0">Change history</h2><button class="sm" data-act="history" data-no="' + no + '">Show history</button></div><div id="hist"></div></div>';
@@ -1139,20 +1139,6 @@ function assetInner(it, a) {
       qual + '<div>' + reviewed + '</div>' +
       '<textarea class="noswipe" id="note-' + k + '" rows="2" placeholder="Note: what needs fixing" data-act="note" data-no="' + no + '" data-f="' + k + '_note">' + esc(it[k + '_note']) + '</textarea>' : '');
 }
-function socialInner(it) {
-  const no = esc(it.item_no);
-  const plats = ['', 'Instagram', 'Facebook', 'Instagram + Facebook', 'YouTube Shorts', 'TikTok', 'Other'];
-  if (!canEdit()) {
-    return '<h3>Social media ' + (it.social_last_post ? '<span class="chip s-ok">Posted ' + day(it.social_last_post) + '</span>' : '<span class="chip s-miss">Never logged</span>') + '</h3>' +
-      (it.social_platform ? '<div class="small">Platform: <b>' + esc(it.social_platform) + '</b></div>' : '') +
-      (it.social_note ? '<div class="ro-note">' + esc(it.social_note) + '</div>' : '');
-  }
-  return '<h3>Social media ' + (it.social_last_post ? '<span class="chip s-ok">Posted ' + day(it.social_last_post) + '</span>' : '<span class="chip s-miss">Never logged</span>') + '</h3>' +
-    '<div class="row noswipe"><input type="date" id="soc-date" data-act="set" data-no="' + no + '" data-f="social_last_post" value="' + isoDay(it.social_last_post) + '" aria-label="Last posted">' +
-    '<button class="sm" data-act="postedtoday" data-no="' + no + '">Posted today</button></div>' +
-    '<select class="noswipe" id="soc-plat" data-act="set" data-no="' + no + '" data-f="social_platform" aria-label="Platform">' + plats.map(p => '<option' + ((it.social_platform || '') === p ? ' selected' : '') + ' value="' + p + '">' + (p || 'Platform…') + '</option>').join('') + '</select>' +
-    '<textarea class="noswipe" id="soc-note" rows="2" placeholder="Social note: post link, caption idea" data-act="note" data-no="' + no + '" data-f="social_note">' + esc(it.social_note) + '</textarea>';
-}
 function refreshCards(no) {
   if (S.view !== 'item') return;
   const it = getItem(no);
@@ -1161,8 +1147,6 @@ function refreshCards(no) {
     const el = document.getElementById('card-' + a.k);
     if (el && !el.contains(document.activeElement)) el.innerHTML = assetInner(it, a);
   });
-  const so = document.getElementById('card-social');
-  if (so && !so.contains(document.activeElement)) so.innerHTML = socialInner(it);
   const ps = document.getElementById('psum'); if (ps) ps.innerHTML = profileSummary(it);
   const pf = document.getElementById('pfacts'); if (pf) pf.innerHTML = profileFacts(it);
 }
@@ -1374,7 +1358,7 @@ function viewSettings() {
     [['auto', 'Auto (match device)'], ['light', 'Light'], ['dark', 'Dark']].map(o => '<button data-act="themeset" data-v="' + o[0] + '" class="' + (themeChoice() === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') +
     '</span><span class="small muted">Saved on this device. The sun/moon button at the top switches too.</span></div></div>';
   if (canEdit()) {
-    h += '<div class="card"><h2 class="sec">Run now</h2><p class="muted small" style="margin-top:0">The channel scan runs by itself once a day, and the YouTube refresh once a week, when an editor or administrator opens the portfolio.</p><div class="row">' +
+    h += '<div class="card"><h2 class="sec">Run now</h2><p class="muted small" style="margin-top:0">The channel scan runs by itself once a day, and the YouTube refresh (title, channel and upload date for every item) also once a day, when an editor or administrator opens the portfolio.</p><div class="row">' +
       '<button data-act="job" data-fn="refreshYouTube">Refresh YouTube details</button>' +
       '<button data-act="job" data-fn="scanChannels">Scan channels for new videos</button>' +
       '<button data-act="reload">Reload data</button></div></div>';
@@ -1429,15 +1413,13 @@ function exportSheets(list) {
     'Photo link', 'Photo status', 'Photo note', 'Photo reviewed',
     'Physical video link', 'Physical video status', 'Physical video note', 'Physical video quality', 'Physical video reviewed',
     'Unbranded video link', 'Unbranded video status', 'Unbranded video note', 'Unbranded video quality', 'Unbranded video reviewed',
-    'YouTube link', 'YouTube status', 'YouTube note', 'YouTube title', 'YouTube channel', 'YouTube uploaded', 'YouTube quality', 'YouTube reviewed',
-    'Last social post', 'Social platform', 'Social note']];
+    'YouTube link', 'YouTube status', 'YouTube note', 'YouTube title', 'YouTube channel', 'YouTube uploaded', 'YouTube quality', 'YouTube reviewed']];
   list.forEach(it => main.push([
     it.item_no, it.name, it.category, onSheet(it) ? 'Yes' : 'No',
     it.photo_url, eff(it, 'photo'), it.photo_note, rv(it, 'photo'),
     it.video_url, eff(it, 'video'), it.video_note, it.video_quality, rv(it, 'video'),
     it.ub_url, eff(it, 'ub'), it.ub_note, it.ub_quality, rv(it, 'ub'),
-    it.yt_url, eff(it, 'yt'), it.yt_note, it.yt_title, it.yt_channel, isoDay(it.yt_published), it.yt_quality, rv(it, 'yt'),
-    isoDay(it.social_last_post), it.social_platform, it.social_note
+    it.yt_url, eff(it, 'yt'), it.yt_note, it.yt_title, it.yt_channel, isoDay(it.yt_published), it.yt_quality, rv(it, 'yt')
   ].map(v => v == null ? '' : String(v))));
   const per = (a, extra) => [['Item #', 'Name', 'Product category', 'Link', 'Status', 'Note', 'Reviewed'].concat(extra.map(e => e[0]))]
     .concat(list.map(it => [it.item_no, it.name, it.category, it[a + '_url'], eff(it, a), it[a + '_note'], rv(it, a)].concat(extra.map(e => e[1](it))).map(v => v == null ? '' : String(v))));
@@ -1519,7 +1501,7 @@ async function start() {
   }
 }
 
-/* Daily channel scan and weekly YouTube refresh, run quietly when an editor opens the page. */
+/* Daily channel scan and daily YouTube refresh, run quietly when an editor opens the page. */
 async function autoJobs() {
   if (DEMO || !canEdit() || !String(S.settings.youtube_api_key || '').trim()) return;
   const stale = (k, hours) => { const t = new Date(S.settings[k] || 0); return isNaN(t) || Date.now() - t > hours * 36e5; };
@@ -1528,7 +1510,7 @@ async function autoJobs() {
       const r = await call('scanChannels');
       if (r.added) { await reload(); toast(r.added + ' new YouTube upload(s) found on your channels. See New videos.', 7000); }
     }
-    if (stale('last_refresh', 24 * 7)) { await call('refreshYouTube'); if (S.view !== 'item') render(); }
+    if (stale('last_refresh', 20)) { await call('refreshYouTube'); if (S.view !== 'item') render(); }
   } catch (e) { console.warn('Automatic YouTube check skipped:', e.message); }
 }
 
@@ -1640,7 +1622,6 @@ document.addEventListener('click', async e => {
       save(no, patch, true); toast('Marked ' + esc(no) + ' acceptable'); step(1); break;
     }
     case 'toggleprice': save(no, { on_price_sheet: el.checked ? 'Yes' : 'No' }); break;
-    case 'postedtoday': save(no, { social_last_post: isoDay(new Date()) }); break;
     case 'embed': {
       const it = getItem(no), box = el.closest('.prev');
       if (DEMO) { box.innerHTML = '<span style="padding:16px">The video plays right here on your live page.</span>'; break; }
