@@ -1,0 +1,1793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Marketing Portfolio</title>
+<script>
+/* ==========================================================================================
+   YOUR SUPABASE CONNECTION — paste the two values from Supabase → Project Settings → API Keys
+   (or Data API) between the quotes. Both are safe to have in a public page: the database only
+   answers people who sign in with a username and password.
+   ========================================================================================== */
+const SUPABASE_URL = 'https://ydhxnjiixifgmnhclpgg.supabase.co';   // looks like https://abcdefghijkl.supabase.co
+const SUPABASE_KEY = 'sb_publishable_m2cCXfMT-O6Ur81LA2alqg_eCtOBUzu';   // the "publishable" key (sb_publishable_…) or the older "anon public" key (eyJ…)
+/* Apply the saved light/dark choice before the page draws. */
+(function () { try { var t = localStorage.getItem('mp_theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* Layout: sticky top bar + tabs; single content column (max 1360px) of cards; item profile = header strip + asset cards grid. */
+:root{
+  --bg:#f3f5f9; --panel:#ffffff; --sunk:#e9edf4; --ink:#141a26; --muted:#5d6779; --line:#dde2eb;
+  --accent:#2c4bd6; --accent-ink:#ffffff; --accent-soft:#e6ebfc;
+  --ok:#11795a; --ok-bg:#ddf3ea; --warn:#946200; --warn-bg:#fdf1d2; --bad:#c42b2b; --bad-bg:#fbe4e4;
+  --exp:#a3245e; --exp-bg:#f8e1ec; --due:#6a45c4; --due-bg:#efe9fd; --new:#1e6aa8; --new-bg:#e1eef9; --miss:#8a93a3; --miss-bg:#edf0f4;
+  --shadow:0 1px 2px rgba(20,26,38,.06),0 4px 14px rgba(20,26,38,.05); --bar-ink:#ffffff;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f131b; --panel:#171c27; --sunk:#1f2533; --ink:#e6eaf2; --muted:#98a2b5; --line:#2a3141;
+  --accent:#7d95ff; --accent-ink:#0f131b; --accent-soft:#232c4d;
+  --ok:#4cc79a; --ok-bg:#15352b; --warn:#e8b54d; --warn-bg:#3a3018; --bad:#ff7676; --bad-bg:#3f1d20;
+  --exp:#ff79b0; --exp-bg:#3d1b2c; --due:#b59cff; --due-bg:#2a2445; --new:#6db5ff; --new-bg:#162c45; --miss:#8a93a3; --miss-bg:#252b37;
+  --shadow:0 1px 2px rgba(0,0,0,.3); --bar-ink:#0f131b; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0f131b; --panel:#171c27; --sunk:#1f2533; --ink:#e6eaf2; --muted:#98a2b5; --line:#2a3141;
+  --accent:#7d95ff; --accent-ink:#0f131b; --accent-soft:#232c4d;
+  --ok:#4cc79a; --ok-bg:#15352b; --warn:#e8b54d; --warn-bg:#3a3018; --bad:#ff7676; --bad-bg:#3f1d20;
+  --exp:#ff79b0; --exp-bg:#3d1b2c; --due:#b59cff; --due-bg:#2a2445; --new:#6db5ff; --new-bg:#162c45; --miss:#8a93a3; --miss-bg:#252b37;
+  --shadow:0 1px 2px rgba(0,0,0,.3); --bar-ink:#0f131b; color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--f-body);-webkit-font-smoothing:antialiased}
+a{color:var(--accent)}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 12px;line-height:1.3}
+button:hover{border-color:var(--muted)}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+button.sm{padding:4px 10px;font-size:13px}
+button:disabled{opacity:.45;cursor:default}
+input[type=text],input[type=search],input[type=number],input[type=date],input[type=email],input[type=password],select,textarea{
+  border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 10px;max-width:100%;min-width:0}
+textarea{width:100%;resize:vertical}
+.mono{font-family:var(--f-mono);font-weight:500;letter-spacing:-.01em}
+.muted{color:var(--muted)}
+.small{font-size:12.5px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+
+/* top bar */
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--panel);border-bottom:1px solid var(--line)}
+.hrow{display:flex;gap:14px;align-items:center;padding:10px 16px;max-width:1360px;margin:0 auto}
+.brand{font:700 21px/1 var(--f-display);letter-spacing:.02em;text-transform:uppercase;white-space:nowrap}
+.brand span{color:var(--accent)}
+#q{flex:1;min-width:0}
+.themebtn{flex:none;width:38px;height:38px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;color:var(--ink)}
+.themebtn svg{width:19px;height:19px}
+nav{display:flex;gap:2px;padding:0 10px;overflow-x:auto;scrollbar-width:none;max-width:1360px;margin:0 auto}
+nav::-webkit-scrollbar{display:none}
+nav button{border:none;border-bottom:3px solid transparent;border-radius:0;background:none;padding:9px 11px;white-space:nowrap;color:var(--muted);font-weight:500}
+nav button.on{color:var(--ink);border-bottom-color:var(--accent)}
+.badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;text-align:center;margin-left:5px;font-weight:600}
+#demo-bar{background:var(--accent-soft);color:var(--ink);text-align:center;font-size:12.5px;padding:6px 16px}
+main{padding-block:16px 40px;padding-inline:16px;max-width:1360px;margin:0 auto}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow)}
+.stack{display:flex;flex-direction:column;gap:14px}
+h2.sec{font:700 15px/1.2 var(--f-display);text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0 0 12px}
+.err{color:var(--bad)}
+
+/* chips & dots */
+.chip{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.s-ok{color:var(--ok);background:var(--ok-bg)}.s-warn{color:var(--warn);background:var(--warn-bg)}.s-bad{color:var(--bad);background:var(--bad-bg)}
+.s-exp{color:var(--exp);background:var(--exp-bg)}.s-due{color:var(--due);background:var(--due-bg)}.s-new{color:var(--new);background:var(--new-bg)}.s-miss{color:var(--miss);background:var(--miss-bg)}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+.d-ok{background:var(--ok)}.d-warn{background:var(--warn)}.d-bad{background:var(--bad)}.d-exp{background:var(--exp)}.d-due{background:var(--due)}.d-new{background:var(--new)}.d-miss{background:transparent;box-shadow:inset 0 0 0 2px var(--miss)}
+
+/* dashboard */
+.dash-top{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,2fr);gap:14px}
+.ready-num{font:700 64px/0.95 var(--f-display);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.ready-num small{font-size:26px;color:var(--muted);font-weight:600}
+.meter{height:10px;border-radius:999px;background:var(--sunk);overflow:hidden;margin:12px 0 8px}
+.meter i{display:block;height:100%;background:var(--ok);border-radius:999px}
+.rules{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;margin-top:12px}
+.rules dt{color:var(--muted)}.rules dd{margin:0;font-weight:500}
+.health{display:flex;flex-direction:column;gap:16px}
+.hrow2{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;align-items:center}
+.hlabel{font-weight:600}
+.hlabel small{display:block;color:var(--muted);font-weight:400;font-size:12px}
+.sbar{display:flex;gap:2px;height:30px;border-radius:7px;overflow:hidden}
+.sbar button{border:none;border-radius:0;padding:0;min-width:3px;font:600 12px/30px var(--f-body);color:var(--bar-ink);overflow:hidden;white-space:nowrap;text-overflow:clip;font-variant-numeric:tabular-nums}
+.sbar button:hover{filter:brightness(1.12)}
+.b-ok{background:var(--ok)}.b-due{background:var(--due)}.b-new{background:var(--new)}.b-warn{background:var(--warn)}.b-bad{background:var(--bad)}.b-exp{background:var(--exp)}
+.b-miss{background:repeating-linear-gradient(135deg,var(--miss-bg) 0 6px,var(--sunk) 6px 12px)!important;color:var(--muted)!important}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted)}
+.legend span{display:inline-flex;gap:6px;align-items:center}
+.alert{display:flex;gap:14px;align-items:center;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--bad);border-radius:12px;padding:12px 16px;box-shadow:var(--shadow);cursor:pointer;width:100%;text-align:left}
+.alert b{font:700 30px/1 var(--f-display);color:var(--bad);font-variant-numeric:tabular-nums}
+.lists{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.lst{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;padding:11px 14px;border-radius:10px;background:var(--panel)}
+.lst b{font:700 24px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.lst.zero b{color:var(--ok)}
+
+/* items list */
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+.seg button{border:none;border-radius:0;padding:6px 11px}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.grid{display:grid;gap:10px}
+.grid.m{grid-template-columns:repeat(auto-fill,minmax(165px,1fr))}
+.grid.l{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+.grid.s{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;text-align:left;padding:0}
+.tile:hover{border-color:var(--accent)}
+.thumb{aspect-ratio:16/10;max-width:100%;background:var(--sunk);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;overflow:hidden;width:100%}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.tbody{padding:7px 10px 9px;min-width:0}
+.tno{font:500 13px var(--f-mono)}
+.tname{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tdots{display:flex;gap:8px;margin-top:6px;align-items:center;font-size:11px;color:var(--muted)}
+.tdots span{display:inline-flex;gap:3px;align-items:center}
+.grid.s .tname{display:none}.grid.s .tbody{padding:4px 6px}.grid.s .tno{font-size:11px}
+.tablewrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;white-space:nowrap}
+th{position:sticky;top:0;background:var(--panel);font-size:12px;color:var(--muted);font-weight:600}
+tbody tr.click{cursor:pointer}tbody tr.click:hover{background:var(--bg)}
+td .mini{width:64px;height:40px;object-fit:cover;border-radius:4px;display:block;background:var(--sunk)}
+.more{text-align:center;margin:14px}
+
+/* item profile */
+.crumbs{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:10px}
+.linkbtn{border:none;background:none;padding:0;color:var(--accent);font-weight:500}
+.phead{display:grid;grid-template-columns:240px minmax(0,1fr) auto;gap:18px;align-items:start}
+.phead .pthumb{aspect-ratio:16/10;max-width:100%;border-radius:10px;overflow:hidden;background:var(--sunk);display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.phead .pthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.pno{font:500 13px var(--f-mono);color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pname{font:700 34px/1.05 var(--f-display);margin:4px 0 10px;text-wrap:balance}
+.psum{display:flex;flex-wrap:wrap;gap:8px}
+.psum button{display:inline-flex;gap:7px;align-items:center;padding:5px 11px;border-radius:999px;font-size:13px}
+.pfacts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 18px;margin-top:14px;font-size:13px}
+.pfacts div span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.navbtns{display:flex;gap:8px;flex-wrap:wrap}
+.bigbtn{padding:9px 15px;font-size:14px}
+.assets{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}
+.asset{display:flex;flex-direction:column;gap:9px;min-width:0}
+.asset h3{margin:0;display:flex;justify-content:space-between;align-items:center;gap:8px;font:700 18px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.04em}
+.prev{aspect-ratio:16/9;max-width:100%;background:var(--sunk);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;position:relative;color:var(--muted);font-size:13px;text-align:center}
+.prev img,.prev iframe,.prev video{width:100%;height:100%;object-fit:contain;border:0;display:block}
+.play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,14,22,.18);border:none;border-radius:0;color:#fff;font-size:40px}
+.loadvid{border:none;background:none;color:var(--muted);font-size:14px;font-weight:600}
+.sbtns{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.sbtns button{padding:8px 4px;font-weight:600;font-size:13px}
+.sbtns .on-ok{background:var(--ok);border-color:var(--ok);color:var(--panel)}
+.sbtns .on-warn{background:var(--warn);border-color:var(--warn);color:var(--panel)}
+.sbtns .on-bad{background:var(--bad);border-color:var(--bad);color:var(--panel)}
+.meta{font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+.meta b{color:var(--ink);font-weight:600}
+.linkrow{display:flex;gap:6px;align-items:center}.linkrow input{flex:1;min-width:0}
+.linkview{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.linkchip{font-size:12.5px;background:var(--sunk);border-radius:6px;padding:4px 8px;text-decoration:none;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.updated{font-size:12.5px;border-radius:8px;padding:6px 10px;background:var(--sunk);overflow-wrap:anywhere}
+.updated.fresh{background:var(--new-bg)}.updated.fresh b{color:var(--new)}
+.qseg button{padding:4px 12px;font-size:12.5px;font-weight:600}
+.thumb{position:relative}
+.newlink{position:absolute;top:6px;left:6px;background:var(--new);color:var(--panel);font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;letter-spacing:.02em}
+.extra{display:grid;grid-template-columns:minmax(120px,max-content) 1fr;gap:6px 16px;font-size:13px;margin:0}
+.extra dt{color:var(--muted)}.extra dd{margin:0;overflow-wrap:anywhere}
+.hist td{white-space:normal;vertical-align:top}
+.hist td.w{max-width:340px;overflow-wrap:anywhere}
+.kbd{font-size:12px;color:var(--muted);margin:0}
+
+/* new videos, import, settings */
+.vrow{display:grid;grid-template-columns:128px minmax(0,1fr) auto;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.vrow:last-child{border-bottom:none}
+.vrow img{width:128px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;display:block;max-width:100%}
+.vact{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.vact input{width:120px}
+.form{display:grid;grid-template-columns:230px minmax(0,1fr);gap:12px 16px;align-items:center}
+code{font-family:var(--f-mono);font-size:12.5px;background:var(--sunk);padding:1px 5px;border-radius:4px}
+
+/* login, toast, modal */
+.login{max-width:400px;margin:8vh auto 0;display:flex;flex-direction:column;gap:12px}
+.login .brand{font-size:28px}
+.login label{display:flex;flex-direction:column;gap:4px;font-weight:500;font-size:13px}
+.rolechip{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);margin-left:6px}
+.nudge{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--warn-bg);color:var(--ink);border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:12px;padding:12px 16px}
+.ro-note{white-space:pre-wrap;font-size:13px;background:var(--sunk);border-radius:8px;padding:8px 10px}
+.users td select{padding:4px 8px}
+.roles{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;margin-top:12px}
+.roles dt{font-weight:600}.roles dd{margin:0;color:var(--muted)}
+#busy{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:16px;z-index:55;display:flex;gap:8px;align-items:center;background:var(--ink);color:var(--bg);padding:7px 14px;border-radius:999px;font-size:13px;font-weight:600;box-shadow:var(--shadow)}
+#busy i{width:12px;height:12px;border-radius:50%;border:2px solid var(--bg);border-top-color:transparent;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+body.waiting{cursor:progress}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;max-width:calc(100vw - 32px)}
+#toast.show{opacity:1;pointer-events:auto}
+#toast a{color:inherit}
+#modal{position:fixed;inset:0;background:rgba(10,14,22,.45);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px}
+#modal .card{max-width:440px;width:100%}
+#loading{padding:60px 0;text-align:center;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+@media (max-width:860px){
+  .dash-top{grid-template-columns:1fr}
+  .phead{grid-template-columns:1fr}
+  .phead .pthumb{max-width:420px}
+  .phead .navbtns{order:-1}
+}
+@media (max-width:640px){
+  .hrow{padding:8px 16px;gap:10px}.brand{font-size:17px}
+  .hrow2{grid-template-columns:1fr;gap:6px}
+  .form{grid-template-columns:1fr;gap:6px}
+  .form > label{margin-top:8px}
+  .vrow{grid-template-columns:96px minmax(0,1fr)}.vrow img{width:96px}.vact{grid-column:1/-1;justify-content:flex-start}
+  .navbtns{width:100%}.navbtns button{flex:1}
+  .pname{font-size:28px}
+  .ready-num{font-size:52px}
+}
+</style>
+</head>
+<body>
+<div id="demo-bar" hidden></div>
+<header id="hdr" hidden>
+  <div class="hrow">
+    <div class="brand">Marketing <span>Portfolio</span></div>
+    <input id="q" type="search" placeholder="Search item #, name or video title" aria-label="Search items">
+    <button id="themebtn" class="themebtn" data-act="theme" type="button"></button>
+  </div>
+  <nav id="nav">
+    <button data-go="dash">Dashboard</button>
+    <button data-go="items">Items</button>
+    <button data-go="review">Review</button>
+    <button data-go="videos">New videos<span id="vbadge"></span></button>
+    <button data-go="import" id="nav-import">Import links</button>
+    <button data-go="users" id="nav-users" hidden>Users</button>
+    <button data-go="settings">Settings</button>
+  </nav>
+</header>
+<main id="main"><div id="loading">Loading portfolio…</div></main>
+<div id="modal" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="busy" hidden role="status" aria-live="polite"><i></i><span>Working…</span></div>
+
+<script>
+/* =============================== state =============================== */
+const S = {
+  items: [], byNo: {}, videos: [], settings: {}, user: '', lastJob: '',
+  view: 'dash', filter: 'all', search: '', priceOnly: true, cat: '', categories: [], layout: 'grid', size: 'm',
+  queue: [], qi: 0, queueLabel: '', shown: 300, preview: [], vsel: {}
+};
+const DEMO = typeof window.DEMO_API === 'function';
+const ASSETS = [
+  { k: 'photo', label: 'Photo', short: 'P' },
+  { k: 'video', label: 'Physical video', short: 'V' },
+  { k: 'ub', label: 'Unbranded video', short: 'U' },
+  { k: 'yt', label: 'YouTube', short: 'Y' }
+];
+const STATUS_BTNS = ['Acceptable', 'Needs update', 'Unacceptable'];
+const ORDER = ['Acceptable', 'Review due', 'Unreviewed', 'Needs update', 'Unacceptable', 'Expired', 'Missing'];
+const CLS = { 'Acceptable': 'ok', 'Needs update': 'warn', 'Unacceptable': 'bad', 'Expired': 'exp', 'Review due': 'due', 'Unreviewed': 'new', 'Missing': 'miss' };
+const BAD = new Set(['Needs update', 'Unacceptable']);
+const FIELD_LABEL = {
+  photo_url: 'Photo link', photo_status: 'Photo status', photo_note: 'Photo note',
+  ub_url: 'Unbranded video link', ub_status: 'Unbranded video status', ub_note: 'Unbranded video note', ub_quality: 'Unbranded video quality',
+  video_url: 'Physical video link', video_status: 'Physical video status', video_note: 'Physical video note', video_quality: 'Physical video quality',
+  yt_url: 'YouTube link', yt_status: 'YouTube status', yt_note: 'YouTube note', yt_quality: 'YouTube quality',
+  social_last_post: 'Last social post', social_platform: 'Social platform', social_note: 'Social note',
+  name: 'Name', category: 'Product category', on_price_sheet: 'On price sheet'
+};
+let CUT = new Date(new Date().getFullYear() - 3, 0, 1);
+
+/* =============================== helpers =============================== */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const main = $('#main');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const day = s => { if (!s) return ''; const d = new Date(s); return isNaN(d) ? String(s) : d.toLocaleDateString(); };
+const isoDay = s => { if (!s) return ''; const d = new Date(s); if (isNaN(d)) return ''; return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const addMonths = (d, n) => { const x = new Date(d); x.setMonth(x.getMonth() + Number(n)); return x; };
+const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+const norm = v => String(v == null ? '' : v).trim().toUpperCase();
+const nf = n => Number(n).toLocaleString();
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage blocked */ } },
+  del(k) { try { localStorage.removeItem(k); } catch (e) { /* storage blocked */ } }
+};
+const AUTH = { token: store.get('mp_token') || '', name: store.get('mp_user') || '' };
+
+const canEdit = () => S.role === 'Editor' || S.role === 'Admin';
+const isAdmin = () => S.role === 'Admin';
+
+/* ---------- light / dark mode ---------- */
+const ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>';
+const ICON_MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>';
+const sysDark = () => !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+const themeChoice = () => document.documentElement.getAttribute('data-theme') || 'auto';
+const isDark = () => { const t = themeChoice(); return t === 'auto' ? sysDark() : t === 'dark'; };
+function setTheme(t) {
+  if (t === 'light' || t === 'dark') { document.documentElement.setAttribute('data-theme', t); store.set('mp_theme', t); }
+  else { document.documentElement.removeAttribute('data-theme'); store.del('mp_theme'); }
+  updateThemeBtn();
+  if (S.view === 'settings') render();
+}
+function updateThemeBtn() {
+  const b = document.getElementById('themebtn'); if (!b) return;
+  const d = isDark();
+  b.innerHTML = d ? ICON_SUN : ICON_MOON;
+  b.title = d ? 'Switch to light mode' : 'Switch to dark mode';
+  b.setAttribute('aria-label', b.title);
+}
+try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateThemeBtn); } catch (e) { /* older browsers */ }
+
+/* =============================== Supabase connection =============================== */
+let memConf = {};
+const CONF = () => ({
+  url: String(SUPABASE_URL || store.get('mp_sb_url') || memConf.url || '').trim().replace(/\/+$/, ''),
+  key: String(SUPABASE_KEY || store.get('mp_sb_key') || memConf.key || '').trim()
+});
+const isConnected = () => !!(CONF().url && CONF().key);
+
+async function rpc(fn, body) {
+  const c = CONF();
+  const headers = { 'Content-Type': 'application/json', apikey: c.key };
+  if (/^eyJ/.test(c.key)) headers.Authorization = 'Bearer ' + c.key;   // older "anon" keys
+  let r;
+  try { r = await fetch(c.url + '/rest/v1/rpc/' + fn, { method: 'POST', headers: headers, body: JSON.stringify(body || {}) }); }
+  catch (e) { throw new Error('Could not reach the database. Check your internet connection and SUPABASE_URL at the top of this file.'); }
+  let j = null;
+  try { j = await r.json(); } catch (e) { /* empty body */ }
+  if (!r.ok) {
+    const msg = String((j && (j.message || j.msg || j.error_description || j.error)) || ('Database error ' + r.status));
+    if (r.status === 404 || /Could not find the function/i.test(msg)) throw new Error('The database is missing the portfolio functions. Run supabase-setup.sql in Supabase → SQL Editor.');
+    if (r.status === 401 || /api key/i.test(msg)) throw new Error('The Supabase key is not right. Check SUPABASE_KEY at the top of this file.');
+    const err = new Error(msg.replace(/^AUTH:\s*/, '')); err.auth = /^AUTH:/.test(msg); throw err;
+  }
+  return j;
+}
+const tok = () => AUTH.token;
+
+/* =============================== YouTube (runs in the browser with the key from Settings) =============================== */
+async function ytApi(path, params) {
+  const key = String(S.settings.youtube_api_key || '').trim();
+  if (!key) throw new Error('Add the YouTube API key in Settings first (an administrator can do this).');
+  let r;
+  try { r = await fetch('https://www.googleapis.com/youtube/v3/' + path + '?' + new URLSearchParams(Object.assign({}, params, { key: key }))); }
+  catch (e) { throw new Error('Could not reach YouTube. Check your internet connection.'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) {
+    const m = String((j.error && j.error.message) || ('YouTube error ' + r.status)).replace(/<[^>]+>/g, '');
+    if (/referer|referrer|blocked/i.test(m)) throw new Error('YouTube refused requests from this web address. In Google Cloud Console → Credentials, add this site to the API key\'s allowed websites.');
+    if (/quota/i.test(m)) throw new Error('The YouTube daily quota is used up. It resets at midnight Pacific time.');
+    throw new Error('YouTube: ' + m);
+  }
+  return j;
+}
+function isoDur(s) {
+  const m = String(s || '').match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/);
+  if (!m) return '';
+  const h = (+m[1] || 0) * 24 + (+m[2] || 0), mi = +m[3] || 0, se = +m[4] || 0;
+  return (h ? h + ':' + String(mi).padStart(2, '0') : mi) + ':' + String(se).padStart(2, '0');
+}
+/** {videoId: {yt_title, yt_channel, yt_published, yt_definition, yt_duration, yt_views}} */
+async function ytMeta(ids) {
+  const out = {}, uniq = [...new Set(ids.filter(Boolean))];
+  for (let i = 0; i < uniq.length; i += 50) {
+    const j = await ytApi('videos', { part: 'snippet,contentDetails,statistics', id: uniq.slice(i, i + 50).join(','), maxResults: 50 });
+    (j.items || []).forEach(v => {
+      out[v.id] = {
+        yt_title: v.snippet.title, yt_channel: v.snippet.channelTitle, yt_published: v.snippet.publishedAt,
+        yt_definition: String(v.contentDetails.definition || '').toUpperCase(), yt_duration: isoDur(v.contentDetails.duration),
+        yt_views: v.statistics && v.statistics.viewCount != null ? String(v.statistics.viewCount) : ''
+      };
+    });
+  }
+  return out;
+}
+const alnum = v => norm(v).replace(/[^A-Z0-9]/g, '');
+/** Finds a tracker item number inside a video title. */
+function itemMatcher() {
+  const set = {};
+  S.items.forEach(it => { const k = alnum(it.item_no); if (k.length >= 3 && /\d/.test(k)) set[k] = it.item_no; });
+  return title => {
+    const t = String(title || '').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+    let best = '';
+    for (let n = 3; n >= 1; n--) for (let j = 0; j + n <= t.length; j++) { const k = t.slice(j, j + n).join(''); if (set[k] && k.length > best.length) best = k; }
+    return best ? set[best] : '';
+  };
+}
+function channelRef(h) {
+  h = String(h || '').trim();
+  let m = h.match(/youtube\.com\/channel\/(UC[A-Za-z0-9_-]{22})/i); if (m) return m[1];
+  m = h.match(/youtube\.com\/(@[A-Za-z0-9._-]+)/i); if (m) return m[1];
+  return h.replace(/\/+$/, '');
+}
+
+/* =============================== item editing rules =============================== */
+const EDITABLE = new Set(['name', 'category', 'on_price_sheet', 'social_last_post', 'social_platform', 'social_note']);
+['photo', 'video', 'ub', 'yt'].forEach(a => ['_url', '_status', '_note'].forEach(f => EDITABLE.add(a + f)));
+['video', 'ub', 'yt'].forEach(a => EDITABLE.add(a + '_quality'));
+const YT_META_KEYS = ['yt_title', 'yt_channel', 'yt_published', 'yt_definition', 'yt_duration', 'yt_views'];
+function resetAsset(a) {
+  const o = {}; o[a + '_status'] = ''; o[a + '_reviewed_at'] = ''; o[a + '_reviewed_by'] = '';
+  if (a !== 'photo') o[a + '_quality'] = '';
+  if (a === 'yt') { YT_META_KEYS.forEach(k => { o[k] = ''; }); o.yt_id = ''; }
+  return o;
+}
+/** Turns what the person changed into the full set of fields to store (a new link resets its review, etc.). */
+function buildPatch(base, patch) {
+  const out = {}, log = [], needYt = [], now = new Date().toISOString(), user = S.user, no = base.item_no;
+  Object.keys(patch).forEach(k => {
+    if (!EDITABLE.has(k)) return;
+    const v = patch[k] == null ? '' : String(patch[k]).trim();
+    const old = base[k] == null ? '' : String(base[k]);
+    const m = k.match(/^(photo|video|ub|yt)_(url|status)$/);
+    if (m && m[2] === 'url') {
+      if (v === old) return;
+      if (m[1] === 'yt' && v && ytId(v) && ytId(v) === base.yt_id) { out[k] = v; return; }
+      Object.assign(out, resetAsset(m[1]));
+      out[m[1] + '_prev_url'] = old;
+      out[m[1] + '_link_updated_at'] = now; out[m[1] + '_link_updated_by'] = user;
+      if (m[1] === 'yt') { const id = ytId(v); out.yt_id = id; if (id) needYt.push(id); }
+      out[k] = v;
+      log.push({ item_no: no, field: k, old: old, new: v });
+      return;
+    }
+    if (m && m[2] === 'status') {
+      if (['', 'Acceptable', 'Needs update', 'Unacceptable'].indexOf(v) < 0) throw new Error('Unknown status: ' + v);
+      out[k] = v; out[m[1] + '_reviewed_at'] = v ? now : ''; out[m[1] + '_reviewed_by'] = v ? user : '';
+      log.push({ item_no: no, field: k, old: old, new: v || '(cleared)' });
+      return;
+    }
+    if (/_quality$/.test(k) && ['', '720p', '1080p', '4K'].indexOf(v) < 0) throw new Error('Quality must be 720p, 1080p or 4K.');
+    out[k] = v;
+    if (v !== old) log.push({ item_no: no, field: k, old: old, new: v });
+  });
+  return { patch: out, log: log, needYt: needYt };
+}
+async function addYtMeta(rows) {   // rows: [{patch}] — fills YouTube title/date for new links when the key is set
+  const ids = rows.map(r => r.patch.yt_id).filter(Boolean);
+  if (!ids.length || !S.settings.youtube_api_key) return;
+  try {
+    const meta = await ytMeta(ids);
+    rows.forEach(r => { const m = r.patch.yt_id && meta[r.patch.yt_id]; if (m) Object.assign(r.patch, m); else if (r.patch.yt_id) r.patch.yt_title = '⚠ Not found (private, deleted or bad link)'; });
+  } catch (e) { console.warn('YouTube details will fill in on the next refresh:', e.message); }
+}
+async function saveRows(rows, log) {
+  const out = [];
+  for (let i = 0; i < rows.length; i += 400) {
+    const part = await rpc('mp_save_items', { p_token: tok(), p_rows: rows.slice(i, i + 400), p_log: i === 0 ? (log || []) : [] });
+    out.push(...part);
+  }
+  return out;
+}
+function normSettings(s) {
+  s = Object.assign({}, s || {});
+  s.review_months = Number(s.review_months) || 6;
+  s.youtube_years = Number(s.youtube_years) || 3;
+  return s;
+}
+
+/* =============================== actions (same names the screens use) =============================== */
+const BE = {
+  async login(u, p, rem) {
+    const r = await rpc('mp_login', { p_username: u, p_password: p, p_remember: !!rem });
+    if (r.error) { const e = new Error(r.error); e.auth = true; throw e; }
+    return r;
+  },
+  logout: () => rpc('mp_logout', { p_token: tok() }),
+  async getData() {
+    const d = await rpc('mp_get_data', { p_token: tok() });
+    d.settings = normSettings(d.settings);
+    d.lastJob = d.settings.last_scan || '';
+    d.user = d.me && d.me.username;
+    return d;
+  },
+  getItemLog: no => rpc('mp_get_item_log', { p_token: tok(), p_item_no: no }),
+  async saveItem(no, patch, base) {
+    base = base || getItem(no);
+    const b = buildPatch(base, patch);
+    if (!Object.keys(b.patch).length) return base;
+    const row = { item_no: base.item_no, patch: b.patch };
+    await addYtMeta([row]);
+    const out = await saveRows([row], b.log);
+    await BE._syncVideoStatuses([row]);
+    return out[0];
+  },
+  async importItems(rows, markOff) {
+    const seen = {}, save = [];
+    let created = 0, updated = 0;
+    rows.forEach(r => {
+      const key = String(r.item_no || '').trim(); if (!key || seen[norm(key)]) return;
+      seen[norm(key)] = 1;
+      const cur = getItem(key), patch = { on_price_sheet: 'Yes' };
+      if (r.name) patch.name = String(r.name).trim();
+      if (r.category) patch.category = String(r.category).trim();
+      if (cur) updated++; else created++;
+      save.push({ item_no: cur ? cur.item_no : key, patch: patch });
+    });
+    await saveRows(save, [{ item_no: '(import)', field: 'item list', old: '', new: 'Imported ' + save.length + ' items' }]);
+    let markedOff = 0;
+    if (markOff) markedOff = await rpc('mp_mark_off_sheet', { p_token: tok(), p_keep: save.map(r => r.item_no) });
+    return { created: created, updated: updated, markedOff: markedOff };
+  },
+  async importLinks(rows) {
+    const res = { updated: 0, same: 0, notFound: [], unmatched: [] };
+    const noItem = rows.filter(r => !r.item_no && r.type === 'yt' && ytId(r.url));
+    if (noItem.length) {
+      let meta = {};
+      try { meta = await ytMeta(noItem.map(r => ytId(r.url))); } catch (e) { /* no key: these stay unmatched */ }
+      const match = itemMatcher();
+      noItem.forEach(r => { const m = meta[ytId(r.url)]; r.item_no = m ? match(m.yt_title) : ''; });
+    }
+    const work = {}, logs = [];
+    rows.forEach(r => {
+      if (['photo', 'video', 'ub', 'yt'].indexOf(r.type) < 0 || !r.url) return;
+      if (!r.item_no) { res.unmatched.push(r.url); return; }
+      const it = getItem(r.item_no);
+      if (!it) { res.notFound.push(r.item_no); return; }
+      const k = norm(it.item_no);
+      const w = work[k] || (work[k] = { base: Object.assign({}, it), patch: {} });
+      const p = {}; p[r.type + '_url'] = r.url;
+      const b = buildPatch(Object.assign({}, w.base, w.patch), p);
+      if (b.log.length) { res.updated++; Object.assign(w.patch, b.patch); logs.push(...b.log); } else res.same++;
+    });
+    const save = Object.values(work).filter(w => Object.keys(w.patch).length).map(w => ({ item_no: w.base.item_no, patch: w.patch }));
+    await addYtMeta(save);
+    await saveRows(save, logs);
+    await BE._syncVideoStatuses(save);
+    return res;
+  },
+  async linkVideos(pairs) {
+    const r = await BE.importLinks(pairs.map(p => ({ item_no: p.item_no, url: 'https://www.youtube.com/watch?v=' + p.video_id, type: 'yt' })));
+    await rpc('mp_save_videos', { p_token: tok(), p_rows: pairs.filter(p => getItem(p.item_no)).map(p => ({ video_id: p.video_id, status: 'Linked', data: { linked_item: getItem(p.item_no).item_no } })) });
+    return { linked: r.updated + r.same, missing: r.notFound };
+  },
+  async _syncVideoStatuses(saved) {   // a replaced YouTube link marks its old video as Replaced in the uploads list
+    const rows = [];
+    saved.forEach(s => {
+      if (!s.patch.yt_id) return;
+      rows.push({ video_id: s.patch.yt_id, status: 'Linked', data: { linked_item: s.item_no } });
+      const old = ytId(s.patch.yt_prev_url);
+      if (old && old !== s.patch.yt_id) rows.push({ video_id: old, status: 'Replaced', data: { linked_item: s.item_no } });
+    });
+    if (rows.length) { try { await rpc('mp_save_videos', { p_token: tok(), p_rows: rows }); } catch (e) { /* not critical */ } }
+  },
+  ignoreVideos: ids => rpc('mp_save_videos', { p_token: tok(), p_rows: ids.map(id => ({ video_id: id, status: 'Ignored' })) }),
+  async scanChannels() {
+    const cutoff = CUT, errors = [], found = {};
+    const handles = String(S.settings.channels || '').split(/[\s,]+/).filter(Boolean).map(channelRef);
+    for (const h of handles) {
+      try {
+        const q = /^UC[A-Za-z0-9_-]{22}$/.test(h) ? { id: h } : { forHandle: h.startsWith('@') ? h : '@' + h };
+        const c = await ytApi('channels', Object.assign({ part: 'contentDetails' }, q));
+        const up = c.items && c.items[0] && c.items[0].contentDetails.relatedPlaylists.uploads;
+        if (!up) { errors.push('Channel not found: ' + h); continue; }
+        let pageToken = '', guard = 0;
+        do {
+          const p = await ytApi('playlistItems', Object.assign({ part: 'snippet,contentDetails', playlistId: up, maxResults: 50 }, pageToken ? { pageToken: pageToken } : {}));
+          let newer = 0;
+          (p.items || []).forEach(x => { const pub = new Date(x.contentDetails.videoPublishedAt || x.snippet.publishedAt); if (pub >= cutoff) { newer++; found[x.contentDetails.videoId] = 1; } });
+          pageToken = p.nextPageToken || '';
+          if (!newer) break;
+        } while (pageToken && ++guard < 200);
+      } catch (e) { errors.push(h + ': ' + e.message); if (/quota|refused/i.test(e.message)) break; }
+    }
+    const known = new Set(await rpc('mp_video_ids', { p_token: tok() }));
+    const newIds = Object.keys(found).filter(id => !known.has(id));
+    const meta = await ytMeta(newIds);
+    const linked = {}, replaced = {}, match = itemMatcher();
+    S.items.forEach(it => { if (it.yt_id) linked[it.yt_id] = it.item_no; const p = ytId(it.yt_prev_url); if (p) replaced[p] = it.item_no; });
+    const rows = [], added = [];
+    newIds.forEach(id => {
+      const m = meta[id]; if (!m) return;
+      const status = linked[id] ? 'Linked' : replaced[id] ? 'Replaced' : 'New';
+      const det = match(m.yt_title);
+      rows.push({ video_id: id, status: status, data: { url: 'https://www.youtube.com/watch?v=' + id, title: m.yt_title, channel: m.yt_channel,
+        published: m.yt_published, definition: m.yt_definition, detected_item: det, linked_item: linked[id] || replaced[id] || '' } });
+      if (status === 'New') added.push(id);
+    });
+    await rpc('mp_save_videos', { p_token: tok(), p_rows: rows, p_last_scan: new Date().toISOString() });
+    S.settings.last_scan = new Date().toISOString();
+    return { scanned: Object.keys(found).length, added: added.length, errors: errors };
+  },
+  async refreshYouTube() {
+    const its = S.items.map(it => { const id = it.yt_id || ytId(it.yt_url); return id ? { it: it, id: id } : null; }).filter(Boolean);
+    const meta = await ytMeta(its.map(x => x.id));
+    const rows = [];
+    its.forEach(x => {
+      const m = meta[x.id] || { yt_title: '⚠ Not found (private, deleted or bad link)' };
+      const patch = {};
+      if (x.it.yt_id !== x.id) patch.yt_id = x.id;
+      Object.keys(m).forEach(k => { if (String(x.it[k] == null ? '' : x.it[k]) !== String(m[k])) patch[k] = m[k]; });
+      if (Object.keys(patch).length) rows.push({ item_no: x.it.item_no, patch: patch });
+    });
+    const out = await saveRows(rows, []);
+    out.forEach(replaceItem);
+    await rpc('mp_set_status_note', { p_token: tok(), p_key: 'last_refresh', p_value: new Date().toISOString() });
+    S.settings.last_refresh = new Date().toISOString();
+    return { refreshed: its.length, changed: rows.length };
+  },
+  async importWorkbook(parsed, markOff) {   // parsed = parseWorkbook(...) result
+    const rows = parsed.items.map(x => ({ item_no: (getItem(x.item_no) || x).item_no, patch: x.patch }));
+    await saveRows(rows, [{ item_no: '(import)', field: 'spreadsheet', old: '', new: 'Loaded ' + rows.length + ' items from ' + parsed.fileName }]);
+    if (parsed.categories.length) await rpc('mp_set_categories', { p_token: tok(), p_list: parsed.categories });
+    let markedOff = 0;
+    if (markOff) markedOff = await rpc('mp_mark_off_sheet', { p_token: tok(), p_keep: rows.map(r => r.item_no) });
+    return { items: rows.length, categories: parsed.categories.length, markedOff: markedOff };
+  },
+  async saveSettings(obj) {
+    const o = {}; Object.keys(obj).forEach(k => { o[k] = obj[k] == null ? '' : String(obj[k]); });
+    return normSettings(await rpc('mp_save_settings', { p_token: tok(), p_obj: o }));
+  },
+  listUsers: () => rpc('mp_list_users', { p_token: tok() }),
+  saveUser: u => rpc('mp_save_user', { p_token: tok(), p_u: u }),
+  changePassword: (cur, next) => rpc('mp_change_password', { p_token: tok(), p_current: cur, p_new: next })
+};
+
+/* =============================== whole-spreadsheet import =============================== */
+const SHEET_COLS = [
+  ['item_no', 'Item #'], ['name', 'Item Name'], ['category', 'Product Category'], ['on_price_sheet', 'On Price Sheet'],
+  ['photo_url', 'Photo Link'], ['photo_status', 'Photo Status'], ['photo_note', 'Photo Note'],
+  ['video_url', 'Physical Video Link'], ['video_status', 'Physical Video Status'], ['video_note', 'Physical Video Note'], ['video_quality', 'Physical Video Quality'],
+  ['ub_url', 'Unbranded Video Link'], ['ub_status', 'Unbranded Video Status'], ['ub_note', 'Unbranded Video Note'], ['ub_quality', 'Unbranded Video Quality'],
+  ['yt_url', 'YouTube Link'], ['yt_status', 'YouTube Status'], ['yt_note', 'YouTube Note'], ['yt_quality', 'YouTube Quality'],
+  ['social_last_post', 'Last Social Post'], ['social_platform', 'Social Platform'], ['social_note', 'Social Note']
+];
+const SHEET_KEY = {};
+SHEET_COLS.forEach(c => { SHEET_KEY[c[0]] = c[0]; SHEET_KEY[c[1].toLowerCase()] = c[0]; });
+const OLD_4K = { 'physical video 4k': 'video_quality', 'video_4k': 'video_quality', 'unbranded video 4k': 'ub_quality', 'ub_4k': 'ub_quality', 'youtube 4k': 'yt_quality', 'yt_4k': 'yt_quality' };
+const isDate = v => Object.prototype.toString.call(v) === '[object Date]';
+const cellText = v => {
+  if (v == null) return '';
+  if (isDate(v)) {
+    if (isNaN(v)) return '';
+    const midnight = !v.getHours() && !v.getMinutes() && !v.getSeconds();
+    return midnight ? v.getFullYear() + '-' + String(v.getMonth() + 1).padStart(2, '0') + '-' + String(v.getDate()).padStart(2, '0') : v.toISOString();
+  }
+  return String(v).trim();
+};
+/** Reads an Excel/CSV download of the Google Sheet: the Items tab (by its headers) and the Categories tab. */
+function parseWorkbook(wb, fileName) {
+  let itemsSheet = null, hdrRow = 0, hdr = [];
+  for (const name of wb.SheetNames) {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: '' });
+    for (let i = 0; i < Math.min(rows.length, 10); i++) {
+      const keys = rows[i].map(h => SHEET_KEY[String(h).trim().toLowerCase()]);
+      if (keys.indexOf('item_no') >= 0 && (keys.indexOf('photo_url') >= 0 || keys.indexOf('yt_url') >= 0 || keys.indexOf('name') >= 0)) { itemsSheet = rows; hdrRow = i; hdr = rows[i].map(String); break; }
+    }
+    if (itemsSheet) break;
+  }
+  if (!itemsSheet) throw new Error('Could not find a tab with an "Item #" column. Use File → Download → Microsoft Excel on your Google Sheet.');
+  const map = hdr.map(h => {
+    const t = h.trim(), l = t.toLowerCase();
+    if (!t) return null;
+    if (SHEET_KEY[l]) return { key: SHEET_KEY[l] };
+    if (OLD_4K[l]) return { key: OLD_4K[l], fourK: true };
+    if (/\(auto\)\s*$/i.test(t)) return null;           // the program fills these in itself
+    return { extra: t };
+  });
+  const items = [], seen = {}, extraCols = new Set();
+  itemsSheet.slice(hdrRow + 1).forEach(r => {
+    const patch = {}, extra = {};
+    map.forEach((m, i) => {
+      if (!m) return;
+      const v = cellText(r[i]); if (!v) return;
+      if (m.extra) { extra[m.extra] = v; extraCols.add(m.extra); return; }
+      if (m.fourK) { if (/^(yes|true|4k)$/i.test(v) && !patch[m.key]) patch[m.key] = '4K'; return; }
+      patch[m.key] = v;
+    });
+    const no = String(patch.item_no || '').trim(); delete patch.item_no;
+    if (!no || seen[norm(no)]) return;
+    seen[norm(no)] = 1;
+    if (patch.yt_url && ytId(patch.yt_url)) patch.yt_id = ytId(patch.yt_url);
+    ['video', 'ub', 'yt'].forEach(a => { if (patch[a + '_quality'] && ['720p', '1080p', '4K'].indexOf(patch[a + '_quality']) < 0) delete patch[a + '_quality']; });
+    if (Object.keys(extra).length) patch.extra = extra;
+    items.push({ item_no: no, patch: patch });
+  });
+  let categories = [];
+  const catName = wb.SheetNames.find(n => /^categor/i.test(n));
+  if (catName) {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[catName], { header: 1, raw: false, defval: '' });
+    categories = rows.slice(1).map(r => String(r[0] || '').trim()).filter(Boolean);
+  }
+  const known = hdr.map((h, i) => map[i] && map[i].key ? h : null).filter(Boolean);
+  return { fileName: fileName, items: items, categories: categories, known: known, extraCols: [...extraCols] };
+}
+
+/* Shows "Working…" while a request is in flight. */
+let pending = 0, busyT;
+const BUSY_LABEL = { saveItem: 'Saving…', getData: 'Loading…', importLinks: 'Importing…', importItems: 'Importing…', linkVideos: 'Linking videos…',
+  scanChannels: 'Scanning YouTube channels…', refreshYouTube: 'Refreshing YouTube details…', importWorkbook: 'Loading your spreadsheet…',
+  saveUser: 'Saving account…', listUsers: 'Loading accounts…', login: 'Signing in…', changePassword: 'Saving password…', saveSettings: 'Saving settings…', getItemLog: 'Loading history…' };
+function busy(on, fn) {
+  pending = Math.max(0, pending + (on ? 1 : -1));
+  const b = document.getElementById('busy');
+  clearTimeout(busyT);
+  if (pending) {
+    b.querySelector('span').textContent = BUSY_LABEL[fn] || 'Working…';
+    busyT = setTimeout(() => { if (pending) { b.hidden = false; document.body.classList.add('waiting'); } }, 250);
+  } else { b.hidden = true; document.body.classList.remove('waiting'); }
+}
+async function call(fn, ...args) {
+  busy(true, fn);
+  try { return await callNow(fn, args); } finally { busy(false); }
+}
+async function callNow(fn, args) {
+  if (DEMO) return window.DEMO_API(fn, args, 'Albert');
+  const f = BE[fn];
+  if (!f) throw new Error('Unknown action: ' + fn);
+  return f.apply(null, args);
+}
+let toastT;
+function toast(msg, ms) {
+  const t = $('#toast'); t.innerHTML = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms || 3200);
+}
+const errMsg = e => esc((e && e.message) || e);
+
+/** In-page confirmation (works everywhere, unlike window.confirm). Resolves true/false,
+    or, when inputLabel is given, the typed text (null on Cancel). */
+function ask(title, body, okLabel, inputLabel) {
+  return new Promise(res => {
+    const m = $('#modal');
+    m.innerHTML = '<div class="card stack" role="dialog" aria-modal="true"><h2 class="sec" style="margin:0">' + esc(title) + '</h2><div>' + body + '</div>' +
+      (inputLabel ? '<label class="small" style="display:flex;flex-direction:column;gap:4px;font-weight:500">' + esc(inputLabel) + '<input id="m_in" type="text" autocomplete="off"></label>' : '') +
+      '<div class="row" style="justify-content:flex-end"><button id="m_no">Cancel</button><button id="m_yes" class="pri">' + esc(okLabel || 'Continue') + '</button></div></div>';
+    m.hidden = false;
+    const done = v => { m.hidden = true; m.innerHTML = ''; res(v); };
+    $('#m_no').onclick = () => done(inputLabel ? null : false);
+    $('#m_yes').onclick = () => done(inputLabel ? $('#m_in').value : true);
+    if (inputLabel) { $('#m_in').focus(); $('#m_in').onkeydown = e => { if (e.key === 'Enter') $('#m_yes').click(); }; }
+    else $('#m_yes').focus();
+  });
+}
+
+function ytId(u) {
+  u = String(u || '').trim();
+  const m = u.match(/(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/|\/live\/|\/v\/)([A-Za-z0-9_-]{11})/);
+  if (m) return m[1];
+  return /^[A-Za-z0-9_-]{11}$/.test(u) ? u : '';
+}
+function driveId(u) {
+  u = String(u || '');
+  if (!/(drive|docs)\.google\.com/.test(u)) return '';
+  const m = u.match(/(?:\/d\/|[?&]id=)([A-Za-z0-9_-]{20,})/);
+  return m ? m[1] : '';
+}
+const IMG_RE = /\.(jpe?g|png|webp|gif|avif)(\?|#|$)/i, VID_RE = /\.(mp4|mov|m4v|webm)(\?|#|$)/i;
+
+/* image sources (demo mode draws sample artwork instead of loading real files) */
+function photoSrc(it) {
+  const u = it.photo_url;
+  if (!u) return '';
+  if (DEMO && window.DEMO_THUMB) return window.DEMO_THUMB(it.item_no, 'photo');
+  const d = driveId(u);
+  if (d) return 'https://drive.google.com/thumbnail?id=' + d + '&sz=w800';
+  return IMG_RE.test(u) ? u : '';
+}
+function ytThumb(id, seed) {
+  if (!id) return '';
+  if (DEMO && window.DEMO_THUMB) return window.DEMO_THUMB(seed || id, 'yt');
+  return 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg';
+}
+const thumbOf = it => photoSrc(it) || ytThumb(it.yt_id, it.item_no);
+
+/* =============================== status logic =============================== */
+function eff(it, a) {
+  if (!it[a + '_url']) return 'Missing';
+  if (a === 'yt' && it.yt_published && new Date(it.yt_published) < CUT) return 'Expired';
+  const st = it[a + '_status'];
+  if (!st) return 'Unreviewed';
+  if (st === 'Acceptable') {
+    const r = it[a + '_reviewed_at'];
+    if (!r || addMonths(r, S.settings.review_months || 6) < new Date()) return 'Review due';
+  }
+  return st;
+}
+const chip = st => '<span class="chip s-' + CLS[st] + '">' + esc(st) + '</span>';
+const onSheet = it => !/^(no|false|n|0)$/i.test(String(it.on_price_sheet || '').trim());
+const isReady = it => ASSETS.every(a => eff(it, a.k) === 'Acceptable');
+
+const FILTERS = [
+  ['all', 'All items', () => true],
+  ['attention', 'Needs attention (anything not acceptable)', it => !isReady(it)],
+  ['ready', 'Fully ready (all four acceptable)', isReady],
+  ['unreviewed', 'Unreviewed / new links', it => ASSETS.some(a => eff(it, a.k) === 'Unreviewed')],
+  ['review_due', 'Review due (older than review period)', it => ASSETS.some(a => eff(it, a.k) === 'Review due')],
+  ['photo_bad', 'Photo: needs update / unacceptable', it => BAD.has(eff(it, 'photo'))],
+  ['photo_missing', 'Photo: missing', it => !it.photo_url],
+  ['video_bad', 'Physical video: needs update / unacceptable', it => BAD.has(eff(it, 'video'))],
+  ['video_missing', 'Physical video: missing', it => !it.video_url],
+  ['ub_bad', 'Unbranded video: needs update / unacceptable', it => BAD.has(eff(it, 'ub'))],
+  ['ub_missing', 'Unbranded video: missing', it => !it.ub_url],
+  ['yt_expired', 'YouTube: expired (before cutoff)', it => eff(it, 'yt') === 'Expired'],
+  ['yt_bad', 'YouTube: needs update / unacceptable', it => BAD.has(eff(it, 'yt'))],
+  ['yt_missing', 'YouTube: missing', it => !it.yt_url],
+  ['missing_either', 'Missing physical video OR YouTube', it => !it.video_url || !it.yt_url],
+  ['missing_both', 'Missing BOTH physical video and YouTube', it => !it.video_url && !it.yt_url],
+  ['not4k', 'Below 4K (720p or 1080p)', it => ['video', 'ub', 'yt'].some(a => it[a + '_url'] && (it[a + '_quality'] === '720p' || it[a + '_quality'] === '1080p'))],
+  ['q720', 'Has a 720p video', it => ['video', 'ub', 'yt'].some(a => it[a + '_url'] && it[a + '_quality'] === '720p')],
+  ['unknown4k', 'Video quality not set yet', it => ['video', 'ub', 'yt'].some(a => it[a + '_url'] && !it[a + '_quality'])],
+  ['link_updated', 'Links changed in the last 14 days', it => ASSETS.some(a => recent(it[a.k + '_link_updated_at'], 14))],
+  ['never_posted', 'Never posted on social', it => !it.social_last_post]
+];
+function recent(at, days) { if (!at) return false; const d = new Date(at); return !isNaN(d) && Date.now() - d < days * 864e5; }
+const FMAP = Object.fromEntries(FILTERS.map(f => [f[0], f]));
+function getFilter(id) {
+  if (FMAP[id]) return FMAP[id];
+  const m = String(id).match(/^a:(photo|video|ub|yt):(.+)$/);
+  if (m) { const a = ASSETS.find(x => x.k === m[1]); return [id, a.label + ': ' + m[2], it => eff(it, m[1]) === m[2]]; }
+  return FILTERS[0];
+}
+function scoped() { return S.items.filter(it => (!S.priceOnly || onSheet(it)) && (!S.cat || it.category === S.cat)); }
+function allCategories() {
+  const set = new Set(S.categories);
+  S.items.forEach(it => { if (it.category) set.add(it.category); });
+  return [...set].sort(natural);
+}
+function catSelect(id) {
+  const counts = {};
+  S.items.forEach(it => { if (!S.priceOnly || onSheet(it)) counts[it.category || ''] = (counts[it.category || ''] || 0) + 1; });
+  return '<select id="' + id + '" data-act="setcat" aria-label="Product category"><option value="">All categories</option>' +
+    allCategories().map(c => '<option value="' + esc(c) + '"' + (c === S.cat ? ' selected' : '') + '>' + esc(c) + ' (' + nf(counts[c] || 0) + ')</option>').join('') + '</select>';
+}
+function filtered() {
+  const f = getFilter(S.filter)[2];
+  const q = S.search.trim().toLowerCase();
+  return scoped().filter(it => f(it) && (!q ||
+    String(it.item_no).toLowerCase().includes(q) ||
+    String(it.name).toLowerCase().includes(q) ||
+    String(it.category).toLowerCase().includes(q) ||
+    String(it.yt_title).toLowerCase().includes(q) ||
+    (it.extra && JSON.stringify(it.extra).toLowerCase().includes(q))));
+}
+
+/* =============================== data =============================== */
+function setData(d) {
+  S.items = d.items.sort((a, b) => natural(a.item_no, b.item_no));
+  S.byNo = {}; S.items.forEach(it => { S.byNo[norm(it.item_no)] = it; });
+  S.videos = d.videos.sort((a, b) => String(b.published).localeCompare(String(a.published)));
+  S.settings = d.settings; S.lastJob = d.lastJob;
+  S.user = (d.me && d.me.username) || AUTH.name || d.user;
+  S.role = (d.me && d.me.role) || 'Viewer';
+  $('#nav-import').hidden = !canEdit();
+  $('#nav-users').hidden = !isAdmin();
+  S.categories = d.categories || [];
+  CUT = new Date(new Date().getFullYear() - Number(S.settings.youtube_years || 3), 0, 1);
+  if (S.settings.app_title) document.title = S.settings.app_title;
+  setBadge();
+}
+function setBadge() { $('#vbadge').innerHTML = S.videos.length ? '<span class="badge">' + S.videos.length + '</span>' : ''; }
+async function reload() { setData(await call('getData')); render(); }
+function replaceItem(fresh) {
+  const k = norm(fresh.item_no), cur = S.byNo[k];
+  if (cur) Object.assign(cur, fresh); else { S.items.push(fresh); S.byNo[k] = fresh; }
+}
+const getItem = no => S.byNo[norm(no)];
+
+/* =============================== routing =============================== */
+function setHash(h, replace) {
+  try { if (replace) history.replaceState(null, '', h); else history.pushState(null, '', h); } catch (e) { /* history unavailable */ }
+}
+function go(v, opts) {
+  opts = opts || {};
+  if (v === 'review') {
+    S.queue = filtered().map(it => it.item_no); S.qi = 0;
+    S.queueLabel = getFilter(S.filter)[1] + (S.search ? ' · search "' + S.search + '"' : '');
+    if (!S.queue.length) { toast('No items in this view to review.'); return; }
+    return openItem(S.queue[0], false);
+  }
+  S.view = v;
+  if (v === 'items') S.shown = 300;
+  setHash('#/' + v, opts.replace);
+  paint();
+}
+function openItem(no, replace) {
+  const i = S.queue.findIndex(x => norm(x) === norm(no));
+  if (i >= 0) S.qi = i;
+  else { S.queue = [no]; S.qi = 0; S.queueLabel = ''; }
+  S.view = 'item';
+  setHash('#/item/' + encodeURIComponent(no), replace);
+  paint();
+}
+function fromHash() {
+  const m = (location.hash || '').match(/^#\/(\w+)(?:\/(.+))?$/);
+  if (!m) return { v: 'dash' };
+  return { v: m[1], no: m[2] ? decodeURIComponent(m[2]) : '' };
+}
+function routeFromHash() {
+  const r = fromHash();
+  if (r.v === 'item' && r.no && getItem(r.no)) {
+    if (!S.queue.length || !S.queue.some(x => norm(x) === norm(r.no))) {
+      S.queue = filtered().map(it => it.item_no);
+      S.queueLabel = getFilter(S.filter)[1];
+    }
+    const i = S.queue.findIndex(x => norm(x) === norm(r.no));
+    if (i < 0) { S.queue = [r.no]; S.qi = 0; } else S.qi = i;
+    S.view = 'item';
+  } else S.view = ['dash', 'items', 'videos', 'import', 'settings', 'users'].includes(r.v) ? r.v : 'dash';
+  if ((S.view === 'import' && !canEdit()) || (S.view === 'users' && !isAdmin())) S.view = 'dash';
+  paint();
+}
+window.addEventListener('popstate', routeFromHash);
+function paint() {
+  $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.go === (S.view === 'item' ? 'review' : S.view)));
+  render();
+  window.scrollTo(0, 0);
+}
+function render() {
+  if (S.view === 'dash') main.innerHTML = viewDash();
+  else if (S.view === 'items') main.innerHTML = viewItems();
+  else if (S.view === 'item') { main.innerHTML = viewItem(); }
+  else if (S.view === 'videos') main.innerHTML = viewVideos();
+  else if (S.view === 'import') main.innerHTML = viewImport();
+  else if (S.view === 'settings') main.innerHTML = viewSettings();
+  else if (S.view === 'users') { main.innerHTML = viewUsers(); if (!S.usersList) loadUsers(); }
+}
+
+/* =============================== dashboard =============================== */
+function viewDash() {
+  const base = scoped(), N = base.length;
+  const nudge = S.pwNudge && !DEMO ? '<div class="nudge"><span class="grow"><strong>You are still using the starting password.</strong> Change it so only you can sign in as ' + esc(S.user) + '.</span><button class="sm" data-go="settings">Change password</button></div>' : '';
+  if (!N) {
+    return '<div class="stack">' + nudge + '<div class="card stack"><h2 class="sec" style="margin:0">Get started</h2><p style="margin:0">The tracker is empty. Go to Import links and load your whole spreadsheet (the Excel download of your Google Sheet).</p>' + (canEdit() ? '<div><button class="pri" data-go="import">Go to Import links</button></div>' : '<p class="muted small" style="margin:0">Ask an editor or administrator to load the item list.</p>') + '</div></div>';
+  }
+  const ready = base.filter(isReady).length, pct = Math.round(ready / N * 100);
+  let h = '<div class="stack">' + nudge;
+  if (S.videos.length) {
+    h += '<button class="alert" data-go="videos"><b>' + S.videos.length + '</b><span><strong>New YouTube uploads waiting to be matched to an item.</strong><br><span class="muted small">Found on your channels by the nightly scan. Open the list to link them in bulk.</span></span></button>';
+  }
+  h += '<div class="dash-top">';
+  h += '<div class="card"><h2 class="sec">Marketing-ready</h2>' +
+    '<div class="ready-num">' + nf(ready) + ' <small>of ' + nf(N) + '</small></div>' +
+    '<div class="meter" role="img" aria-label="' + pct + '% ready"><i style="width:' + pct + '%"></i></div>' +
+    '<div class="small muted">' + pct + '% of ' + (S.priceOnly ? 'price-sheet items' : 'all items') + ' have an acceptable photo, physical video, unbranded video and YouTube video' + (S.cat ? ' (' + esc(S.cat) + ' only)' : '') + '.</div>' +
+    '<dl class="rules"><dt>YouTube cutoff</dt><dd>Uploaded on or after ' + CUT.toLocaleDateString() + '</dd>' +
+    '<dt>Review cycle</dt><dd>Every ' + esc(S.settings.review_months) + ' months</dd>' +
+    '<dt>Channel scan</dt><dd>' + (S.lastJob ? 'Last ran ' + esc(new Date(S.lastJob).toLocaleString()) : 'Not run yet') + '</dd></dl>' +
+    '<div class="row" style="margin-top:12px">' + catSelect('dcat') + '</div>' +
+    '<label class="row small" style="margin-top:10px"><input type="checkbox" data-act="priceonly"' + (S.priceOnly ? ' checked' : '') + '> Only items on the current price sheet</label></div>';
+
+  h += '<div class="card"><h2 class="sec">Asset health</h2><div class="health">';
+  ASSETS.forEach(a => {
+    const c = {}; ORDER.forEach(s => { c[s] = 0; });
+    base.forEach(it => { c[eff(it, a.k)]++; });
+    const good = c['Acceptable'];
+    h += '<div class="hrow2"><div class="hlabel">' + a.label + '<small>' + nf(good) + ' acceptable · ' + nf(c['Missing']) + ' missing</small></div><div class="sbar">';
+    ORDER.forEach(s => {
+      if (!c[s]) return;
+      const w = c[s] / N * 100;
+      h += '<button class="b-' + CLS[s] + '" style="flex:' + c[s] + ' 1 0" data-act="openfilter" data-f="a:' + a.k + ':' + s + '" title="' + a.label + ' · ' + s + ': ' + nf(c[s]) + '" aria-label="' + a.label + ' ' + s + ' ' + c[s] + '">' + (w >= 7 ? nf(c[s]) : '') + '</button>';
+    });
+    h += '</div></div>';
+  });
+  h += '<div class="legend">' + ORDER.filter(s => s !== 'Expired').map(s => '<span><i class="dot d-' + CLS[s] + '"></i>' + s + '</span>').join('') +
+    '<span><i class="dot d-exp"></i>Expired (YouTube only)</span></div>';
+  h += '<div class="small muted">Click any segment to see those items.</div></div></div></div>';
+
+  const cards = ['attention', 'unreviewed', 'review_due', 'yt_expired', 'missing_both', 'photo_missing', 'video_missing', 'ub_missing', 'yt_missing', 'photo_bad', 'video_bad', 'ub_bad', 'yt_bad', 'unknown4k', 'never_posted'];
+  h += '<div class="card"><h2 class="sec">Work lists</h2><div class="lists">';
+  cards.forEach(id => {
+    const n = base.filter(FMAP[id][2]).length;
+    h += '<button class="lst ' + (n ? '' : 'zero') + '" data-act="openfilter" data-f="' + id + '"><span>' + esc(FMAP[id][1]) + '</span><b>' + nf(n) + '</b></button>';
+  });
+  h += '</div></div></div>';
+  return h;
+}
+
+/* =============================== items list =============================== */
+function filterSelect() {
+  const known = FMAP[S.filter];
+  return '<select id="fsel" data-act="setfilter" aria-label="Filter">' +
+    (known ? '' : '<option value="' + esc(S.filter) + '" selected>' + esc(getFilter(S.filter)[1]) + '</option>') +
+    FILTERS.map(f => '<option value="' + f[0] + '"' + (f[0] === S.filter ? ' selected' : '') + '>' + esc(f[1]) + '</option>').join('') + '</select>';
+}
+function viewItems() {
+  const list = filtered();
+  let h = '<div class="toolbar">' + filterSelect() + catSelect('icat') +
+    '<label class="row small"><input type="checkbox" data-act="priceonly"' + (S.priceOnly ? ' checked' : '') + '> Price sheet only</label>' +
+    '<span class="seg"><button data-act="layout" data-v="grid" class="' + (S.layout === 'grid' ? 'on' : '') + '">Grid</button>' +
+    '<button data-act="layout" data-v="table" class="' + (S.layout === 'table' ? 'on' : '') + '">Table</button></span>' +
+    (S.layout === 'grid' ? '<span class="seg" aria-label="Tile size">' + ['s', 'm', 'l'].map(z => '<button data-act="size" data-v="' + z + '" class="' + (S.size === z ? 'on' : '') + '">' + z.toUpperCase() + '</button>').join('') + '</span>' : '') +
+    '<span class="grow"></span>' +
+    '<button class="pri" data-go="review"' + (list.length ? '' : ' disabled') + '>Review these (' + nf(list.length) + ')</button>' +
+    '<select data-act="export" aria-label="Download"><option value="">Download…</option>' +
+    '<option value="xlsx-view">Excel: this view (' + nf(list.length) + ')</option>' +
+    '<option value="xlsx-all">Excel: all items</option>' +
+    '<option value="csv-view">CSV: this view</option>' +
+    '</select></div>';
+  h += '<div class="muted small" style="margin-bottom:8px">' + nf(list.length) + ' item(s) · dots show <b>P</b>hoto · physical <b>V</b>ideo · <b>U</b>nbranded video · <b>Y</b>ouTube status</div>';
+  const shown = list.slice(0, S.shown);
+  if (!list.length) return h + '<div class="card muted">Nothing matches this view.</div>';
+  if (S.layout === 'grid') {
+    h += '<div class="grid ' + S.size + '">' + shown.map(tile).join('') + '</div>';
+  } else {
+    h += '<div class="tablewrap"><table><thead><tr><th></th><th>Item #</th><th>Name</th><th>Category</th>' + ASSETS.map(a => '<th>' + a.label + '</th>').join('') + '<th>YT uploaded</th><th>Quality (V / U / Y)</th><th>Last social post</th></tr></thead><tbody>' +
+      shown.map(it => {
+        const th = thumbOf(it);
+        return '<tr class="click" data-act="open" data-no="' + esc(it.item_no) + '"><td>' + (th ? '<img class="mini" loading="lazy" alt="" src="' + esc(th) + '" onerror="this.style.visibility=\'hidden\'">' : '<div class="mini"></div>') + '</td>' +
+          '<td class="mono">' + esc(it.item_no) + '</td><td>' + esc(it.name) + '</td><td>' + esc(it.category) + '</td>' +
+          ASSETS.map(a => '<td>' + chip(eff(it, a.k)) + '</td>').join('') +
+          '<td>' + day(it.yt_published) + '</td><td>' + ['video', 'ub', 'yt'].map(a => esc(it[a + '_quality'] || '–')).join(' / ') + '</td><td>' + day(it.social_last_post) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  if (list.length > shown.length) h += '<div class="more"><button data-act="more">Show all ' + nf(list.length) + '</button></div>';
+  return h;
+}
+function tile(it) {
+  const th = thumbOf(it);
+  const fresh = ASSETS.some(a => recent(it[a.k + '_link_updated_at'], 14));
+  return '<button class="tile" data-act="open" data-no="' + esc(it.item_no) + '"><span class="thumb">' + (fresh ? '<span class="newlink">Link updated</span>' : '') +
+    (th ? '<img loading="lazy" alt="" src="' + esc(th) + '" onerror="this.remove()">' : 'No image') + '</span>' +
+    '<span class="tbody"><span class="tno" style="display:block">' + esc(it.item_no) + '</span><span class="tname" style="display:block">' + esc(it.name || '') + '</span>' +
+    '<span class="tdots">' + ASSETS.map(a => { const e = eff(it, a.k); return '<span title="' + a.label + ': ' + e + '">' + a.short + ' <i class="dot d-' + CLS[e] + '"></i></span>'; }).join('') + '</span></span></button>';
+}
+
+/* =============================== item profile =============================== */
+function navButtons(no) {
+  return '<div class="navbtns"><button class="bigbtn" data-act="prev"' + (S.qi ? '' : ' disabled') + '>‹ Prev</button>' +
+    (canEdit() ? '<button class="bigbtn" data-act="allgood" data-no="' + esc(no) + '" title="Mark every linked asset Acceptable and go to the next item">✓ All good, next</button>' : '') +
+    '<button class="bigbtn pri" data-act="next"' + (S.qi < S.queue.length - 1 ? '' : ' disabled') + '>Next ›</button></div>';
+}
+function profileSummary(it) {
+  return ASSETS.map(a => { const e = eff(it, a.k); return '<button data-act="jump" data-k="' + a.k + '"><i class="dot d-' + CLS[e] + '"></i>' + a.label + ': <b>' + esc(e) + '</b></button>'; }).join('') +
+    '<button data-act="jump" data-k="social"><i class="dot ' + (it.social_last_post ? 'd-ok' : 'd-miss') + '"></i>Social: <b>' + (it.social_last_post ? 'posted ' + day(it.social_last_post) : 'never logged') + '</b></button>';
+}
+function profileFacts(it) {
+  const q = a => it[a + '_url'] ? esc(it[a + '_quality'] || 'quality not set') : '–';
+  const f = [
+    ['YouTube upload', it.yt_published ? day(it.yt_published) + (it.yt_channel ? ' · ' + esc(it.yt_channel) : '') : '–'],
+    ['YouTube quality', it.yt_url ? q('yt') + (it.yt_definition ? ' · YouTube says ' + esc(it.yt_definition) : '') : '–'],
+    ['Physical video', q('video')],
+    ['Unbranded video', q('ub')],
+    ['Last change', it.updated_at ? day(it.updated_at) : '–']
+  ];
+  return f.map(x => '<div><span>' + x[0] + '</span>' + x[1] + '</div>').join('');
+}
+function viewItem() {
+  if (!S.queue.length) return '<div class="card">No item selected.</div>';
+  S.qi = Math.max(0, Math.min(S.qi, S.queue.length - 1));
+  const it = getItem(S.queue[S.qi]);
+  if (!it) return '<div class="card">Item not found. It may have been removed from the tracker.</div>';
+  const no = esc(it.item_no), th = thumbOf(it);
+  let h = '<div class="crumbs"><button class="linkbtn" data-go="items">‹ Back to list</button><span>' + (S.qi + 1) + ' of ' + nf(S.queue.length) + (S.queueLabel ? ' in “' + esc(S.queueLabel) + '”' : '') + '</span></div>';
+  h += '<div class="stack"><div class="card phead">' +
+    '<div class="pthumb">' + (th ? '<img alt="" src="' + esc(th) + '" onerror="this.remove()">' : 'No image yet') + '</div>' +
+    '<div style="min-width:0"><div class="pno">' + no + '<label class="row" style="gap:5px;font-family:var(--f-body)"><input type="checkbox" data-act="toggleprice" data-no="' + no + '"' + (onSheet(it) ? ' checked' : '') + (canEdit() ? '' : ' disabled') + '> On price sheet</label></div>' +
+    '<div class="pname">' + esc(it.name || 'Unnamed item') + '</div>' +
+    '<div class="row small" style="margin:-4px 0 10px"><label for="p_cat" class="muted">Category</label><input type="text" id="p_cat" list="catlist" style="width:200px;padding:4px 8px" value="' + esc(it.category) + '" placeholder="e.g. 500g Cake" data-act="set" data-no="' + no + '" data-f="category"' + (canEdit() ? '' : ' readonly') + '>' +
+    '<datalist id="catlist">' + allCategories().map(c => '<option value="' + esc(c) + '">').join('') + '</datalist></div>' +
+    '<div class="psum" id="psum">' + profileSummary(it) + '</div>' +
+    '<div class="pfacts" id="pfacts">' + profileFacts(it) + '</div></div>' +
+    navButtons(it.item_no) + '</div>';
+  h += '<div class="assets">' + ASSETS.map(a => '<div class="card asset" id="card-' + a.k + '">' + assetInner(it, a) + '</div>').join('') +
+    '<div class="card asset" id="card-social">' + socialInner(it) + '</div></div>';
+  const ex = it.extra && typeof it.extra === 'object' ? Object.entries(it.extra).filter(x => String(x[1]).trim()) : [];
+  if (ex.length) h += '<div class="card"><h2 class="sec">Price list details</h2><dl class="extra">' + ex.map(x => '<dt>' + esc(x[0]) + '</dt><dd>' + esc(x[1]) + '</dd>').join('') + '</dl></div>';
+  h += '<div class="card"><div class="row"><h2 class="sec grow" style="margin:0">Change history</h2><button class="sm" data-act="history" data-no="' + no + '">Show history</button></div><div id="hist"></div></div>';
+  h += navButtons(it.item_no) + '<p class="kbd">Swipe left or right on your phone, or use the ← → keys on a laptop.</p></div>';
+  return h;
+}
+const QUALITIES = ['720p', '1080p', '4K'];
+function when(at) {
+  const d = new Date(at); if (isNaN(d)) return '';
+  const today = new Date().toDateString() === d.toDateString();
+  return today ? 'today at ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : d.toLocaleDateString();
+}
+const shortUrl = u => String(u).replace(/^https?:\/\/(www\.)?/, '').replace(/^(.{46}).+$/, '$1…');
+function linkUpdated(it, k) {
+  const at = it[k + '_link_updated_at'];
+  if (!at) return '';
+  const prevU = it[k + '_prev_url'];
+  return '<div class="updated' + (recent(at, 14) ? ' fresh' : '') + '"><b>↻ Link updated ' + esc(when(at)) + '</b>' + (it[k + '_link_updated_by'] ? ' by ' + esc(it[k + '_link_updated_by']) : '') +
+    (prevU ? '<br><span class="muted">Previous: <a target="_blank" rel="noopener" href="' + esc(prevU) + '">' + esc(shortUrl(prevU)) + '</a></span>' : '') + '</div>';
+}
+function assetInner(it, a) {
+  const k = a.k, url = it[k + '_url'] || '', e = eff(it, k), no = esc(it.item_no);
+  let prev = '<div class="prev">No link yet</div>';
+  if (url) {
+    if (k === 'photo') {
+      const src = photoSrc(it);
+      prev = '<div class="prev">' + (src ? '<img alt="Product photo" src="' + esc(src) + '" onerror="this.outerHTML=\'<span>Preview unavailable. Use the link.</span>\'">' : '<span>No preview. Use the link.</span>') + '</div>';
+    } else if (k === 'yt' && it.yt_id) {
+      prev = '<div class="prev noswipe"><img alt="YouTube thumbnail" src="' + esc(ytThumb(it.yt_id, it.item_no)) + '"><button class="play" data-act="embed" data-k="yt" data-no="' + no + '" aria-label="Play">▶</button></div>';
+    } else if ((k === 'video' || k === 'ub') && (driveId(url) || VID_RE.test(url))) {
+      prev = '<div class="prev noswipe"><button class="loadvid" data-act="embed" data-k="' + k + '" data-no="' + no + '">▶ Load video preview</button></div>';
+    } else prev = '<div class="prev"><span>No preview. Use the link.</span></div>';
+  }
+  let meta = '';
+  if (k === 'yt' && url) {
+    meta = '<div class="meta">' + (it.yt_title ? '<b>' + esc(it.yt_title) + '</b><br>' : '<i>Title and upload date fill in after a YouTube refresh</i><br>') +
+      [it.yt_channel, it.yt_published && ('Uploaded ' + day(it.yt_published)), it.yt_definition, it.yt_duration, it.yt_views && (nf(it.yt_views) + ' views')].filter(Boolean).map(esc).join(' · ') +
+      (e === 'Expired' ? '<br><span style="color:var(--exp)">Uploaded before ' + CUT.toLocaleDateString() + '. Replace it with a newer upload.</span>' : '') + '</div>';
+  }
+  const st = it[k + '_status'], q = it[k + '_quality'] || '';
+  const reviewed = '<span class="small muted">' + (it[k + '_reviewed_at'] ? 'Reviewed ' + day(it[k + '_reviewed_at']) + ' by ' + esc(String(it[k + '_reviewed_by']).split('@')[0]) : 'Not reviewed yet') + '</span>';
+  if (!canEdit()) {
+    return '<h3>' + a.label + ' ' + chip(e) + '</h3>' + prev + meta +
+      (url ? '<div class="linkview"><a class="linkchip" target="_blank" rel="noopener" href="' + esc(url) + '">' + esc(shortUrl(url)) + ' ↗</a></div>' : '') +
+      linkUpdated(it, k) +
+      (url && k !== 'photo' ? '<div class="small">Quality: <b>' + esc(q || 'not set') + '</b></div>' : '') +
+      (url ? '<div>' + reviewed + '</div>' : '') +
+      (it[k + '_note'] ? '<div class="ro-note">' + esc(it[k + '_note']) + '</div>' : '');
+  }
+  const editing = !url || S.editLink === norm(it.item_no) + '|' + k;
+  const linkBlock = editing
+    ? '<div class="linkrow noswipe"><input type="text" id="url-' + k + '" value="' + esc(url) + '" placeholder="Paste ' + a.label.toLowerCase() + ' link" aria-label="' + a.label + ' link">' +
+      '<button class="sm pri" data-act="saveurl" data-k="' + k + '" data-no="' + no + '">Save</button>' +
+      (url ? '<button class="sm" data-act="canceledit" data-no="' + no + '">Cancel</button>' : '') + '</div>'
+    : '<div class="linkview"><a class="linkchip" target="_blank" rel="noopener" href="' + esc(url) + '" title="' + esc(url) + '">' + esc(shortUrl(url)) + ' ↗</a>' +
+      '<button class="sm" data-act="editlink" data-k="' + k + '" data-no="' + no + '">' + (k === 'yt' ? 'Change YouTube link' : 'Change link') + '</button></div>';
+  const qual = k !== 'photo'
+    ? '<div class="row small"><span class="muted">Quality</span><span class="seg qseg" role="group" aria-label="' + a.label + ' quality">' +
+      QUALITIES.map(v => '<button data-act="quality" data-k="' + k + '" data-no="' + no + '" data-v="' + v + '" class="' + (q === v ? 'on' : '') + '">' + v + '</button>').join('') + '</span></div>' : '';
+  return '<h3>' + a.label + ' ' + chip(e) + '</h3>' + prev + meta + linkBlock + linkUpdated(it, k) +
+    (url ? '<div class="sbtns">' + STATUS_BTNS.map(s => '<button data-act="status" data-k="' + k + '" data-no="' + no + '" data-v="' + s + '" class="' + (st === s ? 'on-' + CLS[s] : '') + '">' + s + '</button>').join('') + '</div>' +
+      qual + '<div>' + reviewed + '</div>' +
+      '<textarea class="noswipe" id="note-' + k + '" rows="2" placeholder="Note: what needs fixing" data-act="note" data-no="' + no + '" data-f="' + k + '_note">' + esc(it[k + '_note']) + '</textarea>' : '');
+}
+function socialInner(it) {
+  const no = esc(it.item_no);
+  const plats = ['', 'Instagram', 'Facebook', 'Instagram + Facebook', 'YouTube Shorts', 'TikTok', 'Other'];
+  if (!canEdit()) {
+    return '<h3>Social media ' + (it.social_last_post ? '<span class="chip s-ok">Posted ' + day(it.social_last_post) + '</span>' : '<span class="chip s-miss">Never logged</span>') + '</h3>' +
+      (it.social_platform ? '<div class="small">Platform: <b>' + esc(it.social_platform) + '</b></div>' : '') +
+      (it.social_note ? '<div class="ro-note">' + esc(it.social_note) + '</div>' : '');
+  }
+  return '<h3>Social media ' + (it.social_last_post ? '<span class="chip s-ok">Posted ' + day(it.social_last_post) + '</span>' : '<span class="chip s-miss">Never logged</span>') + '</h3>' +
+    '<div class="row noswipe"><input type="date" id="soc-date" data-act="set" data-no="' + no + '" data-f="social_last_post" value="' + isoDay(it.social_last_post) + '" aria-label="Last posted">' +
+    '<button class="sm" data-act="postedtoday" data-no="' + no + '">Posted today</button></div>' +
+    '<select class="noswipe" id="soc-plat" data-act="set" data-no="' + no + '" data-f="social_platform" aria-label="Platform">' + plats.map(p => '<option' + ((it.social_platform || '') === p ? ' selected' : '') + ' value="' + p + '">' + (p || 'Platform…') + '</option>').join('') + '</select>' +
+    '<textarea class="noswipe" id="soc-note" rows="2" placeholder="Social note: post link, caption idea" data-act="note" data-no="' + no + '" data-f="social_note">' + esc(it.social_note) + '</textarea>';
+}
+function refreshCards(no) {
+  if (S.view !== 'item') return;
+  const it = getItem(no);
+  if (!it || norm(S.queue[S.qi]) !== norm(no)) return;
+  ASSETS.forEach(a => {
+    const el = document.getElementById('card-' + a.k);
+    if (el && !el.contains(document.activeElement)) el.innerHTML = assetInner(it, a);
+  });
+  const so = document.getElementById('card-social');
+  if (so && !so.contains(document.activeElement)) so.innerHTML = socialInner(it);
+  const ps = document.getElementById('psum'); if (ps) ps.innerHTML = profileSummary(it);
+  const pf = document.getElementById('pfacts'); if (pf) pf.innerHTML = profileFacts(it);
+}
+async function save(no, patch, quiet) {
+  const it = getItem(no); if (!it) return;
+  const backup = Object.assign({}, it);
+  Object.keys(patch).forEach(k => {
+    it[k] = patch[k];
+    const m = k.match(/^(photo|video|ub|yt)_status$/);
+    if (m) { it[m[1] + '_reviewed_at'] = patch[k] ? new Date().toISOString() : ''; it[m[1] + '_reviewed_by'] = patch[k] ? S.user : ''; }
+  });
+  refreshCards(no);
+  try {
+    const fresh = await call('saveItem', it.item_no, patch, backup);
+    replaceItem(fresh);
+    refreshCards(no);
+    if (!quiet) toast('Saved ' + esc(it.item_no));
+  } catch (e) {
+    Object.keys(it).forEach(k => delete it[k]); Object.assign(it, backup);
+    refreshCards(no);
+    toast('Not saved: ' + errMsg(e), 6000);
+    if (e.auth) signOut(e.message);
+  }
+}
+function step(d) {
+  const n = S.qi + d;
+  if (n < 0 || n >= S.queue.length) return;
+  S.qi = n;
+  setHash('#/item/' + encodeURIComponent(S.queue[n]), true);
+  render(); window.scrollTo(0, 0);
+}
+const fmtVal = v => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(v)) ? day(v) : v;
+async function showHistory(no) {
+  const box = $('#hist'); if (!box) return;
+  box.innerHTML = '<p class="muted small">Loading…</p>';
+  try {
+    const rows = await call('getItemLog', no);
+    if (!rows.length) { box.innerHTML = '<p class="muted small">No changes recorded yet.</p>'; return; }
+    box.innerHTML = '<div class="tablewrap" style="margin-top:10px;box-shadow:none"><table class="hist"><thead><tr><th>When</th><th>Who</th><th>What</th><th>Change</th></tr></thead><tbody>' +
+      rows.map(r => ({ ...r, from: fmtVal(r.from), to: fmtVal(r.to) })).map(r => '<tr><td>' + esc(new Date(r.at).toLocaleString()) + '</td><td>' + esc(String(r.user).split('@')[0]) + '</td><td>' + esc(FIELD_LABEL[r.field] || r.field) + '</td><td class="w">' +
+        (r.from ? '<span class="muted">' + esc(r.from) + '</span> → ' : '') + esc(r.to) + '</td></tr>').join('') + '</tbody></table></div>';
+  } catch (e) { box.innerHTML = '<p class="err small">' + errMsg(e) + '</p>'; }
+}
+
+/* =============================== new videos =============================== */
+function viewVideos() {
+  let h = '<div class="stack"><div class="card"><div class="row"><div class="grow"><h2 class="sec" style="margin:0 0 4px">New YouTube uploads not linked to an item</h2>' +
+    '<div class="muted small">Uploads on your channels since ' + CUT.toLocaleDateString() + '. Linking one makes it that item\'s YouTube video (the old link is kept as "previous"). The item # is filled in when the title contains a known item number.</div></div>' +
+    (canEdit() ? '<button data-act="scan">Scan channels now</button>' +
+    '<button class="pri" data-act="linkall"' + (S.videos.length ? '' : ' disabled') + '>Link all with an item #</button>' : '') + '</div></div>';
+  if (!S.videos.length) return h + '<div class="card muted">Nothing waiting. New uploads show up here after the nightly scan, or press "Scan channels now".</div></div>';
+  h += '<datalist id="itemlist">' + S.items.map(it => '<option value="' + esc(it.item_no) + '">').join('') + '</datalist><div class="card">';
+  S.videos.forEach(v => {
+    const guess = S.vsel[v.video_id] != null ? S.vsel[v.video_id] : (v.detected_item || '');
+    const known = guess && getItem(guess);
+    const cur = known && known.yt_url ? ' <span class="small muted">(replaces ' + (known.yt_published ? 'video from ' + day(known.yt_published) : 'current link') + ')</span>' : '';
+    h += '<div class="vrow"><a target="_blank" rel="noopener" href="' + esc(v.url) + '"><img loading="lazy" alt="" src="' + esc(ytThumb(v.video_id, v.detected_item || v.video_id)) + '"></a>' +
+      '<div style="min-width:0"><a target="_blank" rel="noopener" href="' + esc(v.url) + '"><b>' + esc(v.title) + '</b></a><div class="small muted">' + esc(v.channel) + ' · ' + day(v.published) + ' · ' + esc(v.definition) + '</div>' +
+      (guess ? (known ? '<div class="small" style="color:var(--ok)">→ <span class="mono">' + esc(guess) + '</span> ' + esc(known.name || '') + cur + '</div>' : '<div class="small err">' + esc(guess) + ' is not in the tracker</div>') : '<div class="small muted">No item number found in the title.</div>') + '</div>' +
+      (canEdit() ? '<div class="vact"><input type="text" list="itemlist" placeholder="Item #" value="' + esc(guess) + '" data-act="vitem" data-id="' + esc(v.video_id) + '" aria-label="Item number">' +
+      '<button class="sm pri" data-act="vlink" data-id="' + esc(v.video_id) + '">Link</button><button class="sm" data-act="vignore" data-id="' + esc(v.video_id) + '">Ignore</button></div>' : '<div></div>') + '</div>';
+  });
+  return h + '</div></div>';
+}
+async function linkPairs(pairs) {
+  const bad = pairs.filter(p => !getItem(p.item_no));
+  pairs = pairs.filter(p => getItem(p.item_no));
+  if (!pairs.length) { toast(bad.length ? 'Those item numbers are not in the tracker.' : 'Nothing to link.'); return; }
+  toast('Linking ' + pairs.length + ' video(s)…', 20000);
+  try {
+    const r = await call('linkVideos', pairs);
+    pairs.forEach(p => delete S.vsel[p.video_id]);
+    await reload();
+    toast('Linked ' + r.linked + ' video(s)' + (bad.length ? ' · ' + bad.length + ' skipped (item not in tracker)' : ''));
+  } catch (e) { toast(errMsg(e), 6000); }
+}
+
+/* =============================== import =============================== */
+function viewImport() {
+  let h = '<div class="stack"><div class="card"><h2 class="sec">Load your whole spreadsheet</h2><p class="muted small" style="margin-top:0">In your Google Sheet choose <b>File → Download → Microsoft Excel (.xlsx)</b>, then pick that file here. Items, links, statuses, notes, categories and your extra price-list columns are all loaded. Empty cells never erase what is already saved, so you can load an updated copy any time.</p>' +
+    '<div class="row"><input type="file" id="wbfile" accept=".xlsx,.xls,.csv"></div><div id="wbsum"></div></div>';
+  h += '<div class="card"><h2 class="sec">1 · Master item list</h2><p class="muted small" style="margin-top:0">Upload the price sheet (Excel or CSV). It needs an item-number column; name and product-category columns are optional. New items are added and existing items get their name updated.</p>' +
+    '<div class="row"><input type="file" id="mfile" accept=".xlsx,.xls,.csv"><label class="small row"><input type="checkbox" id="moff"> Mark items that are not in this file as "not on price sheet"</label></div><div id="mmap"></div></div>';
+  h += '<div class="card"><h2 class="sec">2 · Paste links</h2><p class="muted small" style="margin-top:0">One per line: <code>ITEM# link</code> with a tab, comma or space between. YouTube links can be pasted on their own; the item # is found from the video title. Unbranded video links look like any other video link, so choose "Unbranded videos" in the list below when pasting them.</p>' +
+    '<textarea id="paste" rows="6" placeholder="DM1234  https://youtu.be/abc123xyz89&#10;DM5678  https://drive.google.com/file/d/…/view&#10;https://www.youtube.com/watch?v=abc123xyz89"></textarea>' +
+    '<div class="row" style="margin-top:8px">Links are <select id="ptype"><option value="auto">Auto-detect</option><option value="photo">Photos</option><option value="video">Physical videos</option><option value="ub">Unbranded videos</option><option value="yt">YouTube</option></select>' +
+    '<button data-act="parsepaste">Preview</button></div></div>';
+  h += '<div class="card"><h2 class="sec">3 · Upload a links spreadsheet</h2><p class="muted small" style="margin-top:0">Excel or CSV with an item-number column and one or more link columns (for example "Photo", "Video", "Unbranded", "YouTube"). You can change how each column is used before importing.</p>' +
+    '<input type="file" id="lfile" accept=".xlsx,.xls,.csv"><div id="lmap"></div></div>';
+  h += '<div id="pv">' + previewHtml() + '</div></div>';
+  return h;
+}
+function guessType(url, dtype) {
+  if (dtype && dtype !== 'auto') return dtype;
+  if (ytId(url) && /youtu/.test(url)) return 'yt';
+  if (IMG_RE.test(url)) return 'photo';
+  if (VID_RE.test(url)) return 'video';
+  return '';
+}
+function parsePaste(text, dtype) {
+  return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
+    const parts = l.split(/[\t,;]+|\s+/).map(p => p.trim()).filter(Boolean);
+    const url = parts.find(p => /^https?:\/\//i.test(p)) || '';
+    const item = parts.find(p => p !== url && !/^https?:\/\//i.test(p)) || '';
+    return { item_no: item, url: url, type: guessType(url, dtype) };
+  });
+}
+function rowState(r) {
+  if (!r.url) return ['No link found', 'bad', false];
+  if (!r.type) return ['Can\'t tell which asset this is. Pick a type above.', 'bad', false];
+  if (!r.item_no) return r.type === 'yt' ? ['Item # will be matched from the title', 'new', true] : ['No item #', 'bad', false];
+  const it = getItem(r.item_no);
+  if (!it) return ['Item not in tracker', 'bad', false];
+  const cur = it[r.type + '_url'];
+  const same = r.type === 'yt' ? (ytId(cur) && ytId(cur) === ytId(r.url)) : cur === r.url;
+  if (same) return ['Same as current', 'miss', false];
+  return cur ? ['Replaces current link, will need review', 'warn', true] : ['New link', 'ok', true];
+}
+function previewHtml() {
+  const rows = S.preview;
+  if (!rows.length) return '';
+  const st = rows.map(rowState), ok = st.filter(s => s[2]).length;
+  const tl = { photo: 'Photo', video: 'Physical video', ub: 'Unbranded video', yt: 'YouTube' };
+  return '<div class="card"><div class="row"><h2 class="sec grow" style="margin:0">Preview: ' + rows.length + ' link(s), ' + ok + ' will be applied</h2>' +
+    '<button data-act="clearpv">Clear</button><button class="pri" data-act="applypv"' + (ok ? '' : ' disabled') + '>Apply ' + ok + '</button></div>' +
+    '<div class="tablewrap" style="margin-top:10px;max-height:420px;overflow:auto;box-shadow:none"><table><thead><tr><th>Item #</th><th>Type</th><th>Link</th><th>Result</th></tr></thead><tbody>' +
+    rows.slice(0, 1000).map((r, i) => '<tr><td class="mono">' + esc(r.item_no) + '</td><td>' + esc(tl[r.type] || '?') + '</td><td style="max-width:420px;overflow:hidden;text-overflow:ellipsis">' + esc(r.url) + '</td><td><span class="chip s-' + st[i][1] + '">' + esc(st[i][0]) + '</span></td></tr>').join('') +
+    '</tbody></table></div>' + (rows.length > 1000 ? '<p class="small muted">Showing the first 1,000 rows.</p>' : '') + '</div>';
+}
+function readFileRows(file) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      try {
+        const wb = XLSX.read(new Uint8Array(fr.result), { type: 'array' });
+        res(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' }));
+      } catch (e) { rej(e); }
+    };
+    fr.onerror = () => rej(fr.error);
+    fr.readAsArrayBuffer(file);
+  });
+}
+let FILE_M = null, FILE_L = null;
+const ITEM_COL = /item|sku|part|code|model|no\.?$|number|#/i;
+function headerRowIndex(rows) {
+  for (let i = 0; i < Math.min(rows.length, 15); i++) if (rows[i].some(c => ITEM_COL.test(String(c)))) return i;
+  return 0;
+}
+function colGuess(h, sample) {
+  const s = String(h).toLowerCase();
+  if (/you ?tube|\byt\b/.test(s)) return 'yt';
+  if (/unbrand|no.?logo|white.?label|generic|clean/.test(s)) return 'ub';
+  if (/photo|picture|image|img|pic/.test(s)) return 'photo';
+  if (/video|clip|footage/.test(s)) return 'video';
+  const urls = sample.filter(v => /^https?:\/\//i.test(v));
+  if (urls.length && urls.filter(u => /youtu/.test(u)).length > urls.length / 2) return 'yt';
+  if (urls.length && urls.filter(u => IMG_RE.test(u)).length > urls.length / 2) return 'photo';
+  if (urls.length && urls.filter(u => VID_RE.test(u)).length > urls.length / 2) return 'video';
+  return urls.length ? 'video' : '';
+}
+function colOptions(hdr, sel) {
+  return hdr.map((h, i) => '<option value="' + i + '"' + (i === sel ? ' selected' : '') + '>' + esc(h || ('Column ' + (i + 1))) + '</option>').join('');
+}
+function mapMaster(rows) {
+  const hi = headerRowIndex(rows), hdr = rows[hi] || [];
+  const ic = hdr.findIndex(c => ITEM_COL.test(String(c)));
+  const cc = hdr.findIndex((c, i) => i !== ic && /categ|type|class|kind/i.test(String(c)));
+  const nc = hdr.findIndex((c, i) => i !== ic && i !== cc && /name|desc|product|title/i.test(String(c)));
+  FILE_M = { rows, hi };
+  $('#mmap').innerHTML = '<div class="row" style="margin-top:10px">Item # column <select id="mic">' + colOptions(hdr, Math.max(ic, 0)) + '</select>' +
+    'Name column <select id="mnc"><option value="-1">(none)</option>' + colOptions(hdr, nc) + '</select>' +
+    'Category column <select id="mcc"><option value="-1">(none)</option>' + colOptions(hdr, cc) + '</select>' +
+    '<span class="muted small">' + nf(rows.length - hi - 1) + ' rows</span><button class="pri" data-act="applymaster">Import item list</button></div>';
+}
+function mapLinks(rows) {
+  const hi = headerRowIndex(rows), hdr = rows[hi] || [], body = rows.slice(hi + 1);
+  let ic = hdr.findIndex(c => ITEM_COL.test(String(c)));
+  if (ic < 0) ic = 0;
+  FILE_L = { rows, hi };
+  let h = '<div style="margin-top:10px"><div class="row">Item # column <select id="lic">' + colOptions(hdr, ic) + '</select></div><div class="row" style="margin-top:8px">';
+  hdr.forEach((c, i) => {
+    if (i === ic) return;
+    const g = colGuess(c, body.slice(0, 50).map(r => String(r[i] || '')));
+    h += '<label class="small">' + esc(c || ('Column ' + (i + 1))) + ' <select data-lcol="' + i + '"><option value="">ignore</option>' +
+      ['photo', 'video', 'ub', 'yt'].map(t => '<option value="' + t + '"' + (g === t ? ' selected' : '') + '>' + { photo: 'Photo', video: 'Physical video', ub: 'Unbranded video', yt: 'YouTube' }[t] + '</option>').join('') + '</select></label>';
+  });
+  h += '</div><button style="margin-top:8px" data-act="previewfile">Preview</button></div>';
+  $('#lmap').innerHTML = h;
+}
+
+/* =============================== settings =============================== */
+function viewSettings() {
+  const s = S.settings, ro = isAdmin() ? '' : ' disabled';
+  let h = '<div class="stack"><div class="card"><h2 class="sec">Your account</h2>' +
+    '<div class="row" style="margin-bottom:12px"><span class="grow">Signed in as <b>' + esc(S.user) + '</b><span class="rolechip">' + esc(roleLabel(S.role)) + '</span></span>' +
+    (DEMO ? '' : '<button data-act="logout">Sign out</button>') + '</div>' +
+    '<form id="pwform" class="form" autocomplete="off">' +
+    '<label for="pw_cur">Current password</label><input type="password" id="pw_cur" autocomplete="current-password" required>' +
+    '<label for="pw_new">New password</label><input type="password" id="pw_new" autocomplete="new-password" minlength="6" required placeholder="At least 6 characters">' +
+    '<label for="pw_new2">New password again</label><input type="password" id="pw_new2" autocomplete="new-password" minlength="6" required>' +
+    '<span></span><div><button class="pri" type="submit">Change password</button></div></form></div>';
+  h += '<div class="card"><h2 class="sec">Rules</h2>' + (isAdmin() ? '' : '<p class="muted small" style="margin-top:0">Only administrators can change these.</p>') + '<div class="form">' +
+    '<label for="st_rm">Review every (months)</label><input type="number" min="1" max="60" id="st_rm" value="' + esc(s.review_months) + '"' + ro + '>' +
+    '<label for="st_yy">YouTube current window (years)</label><div><input type="number" min="1" max="20" id="st_yy" value="' + esc(s.youtube_years) + '"' + ro + '> <span class="muted small">Videos uploaded on or after ' + CUT.toLocaleDateString() + ' are current. Moves forward every January 1.</span></div>' +
+    '<label for="st_ch">Channels to scan</label><textarea id="st_ch" rows="3" placeholder="@handle, @handle2, UC…"' + ro + '>' + esc(s.channels) + '</textarea>' +
+    (isAdmin() ? '<label for="st_key">YouTube API key</label><div><input type="password" id="st_key" autocomplete="off" style="width:100%" value="' + esc(s.youtube_api_key || '') + '" placeholder="AIza…"><div class="muted small">Used to read video titles and upload dates and to scan your channels. Only editors and administrators receive it. In Google Cloud Console, limit the key to the YouTube Data API and to this website\'s address.</div></div>' : '') +
+    '</div>' + (isAdmin() ? '<div class="row" style="margin-top:14px"><button class="pri" data-act="savesettings">Save settings</button></div>' : '') + '</div>';
+  h += '<div class="card"><h2 class="sec">Appearance</h2><div class="row"><span class="seg" role="group" aria-label="Theme">' +
+    [['auto', 'Auto (match device)'], ['light', 'Light'], ['dark', 'Dark']].map(o => '<button data-act="themeset" data-v="' + o[0] + '" class="' + (themeChoice() === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') +
+    '</span><span class="small muted">Saved on this device. The sun/moon button at the top switches too.</span></div></div>';
+  if (canEdit()) {
+    h += '<div class="card"><h2 class="sec">Run now</h2><p class="muted small" style="margin-top:0">The channel scan runs by itself once a day, and the YouTube refresh once a week, when an editor or administrator opens the portfolio.</p><div class="row">' +
+      '<button data-act="job" data-fn="refreshYouTube">Refresh YouTube details</button>' +
+      '<button data-act="job" data-fn="scanChannels">Scan channels for new videos</button>' +
+      '<button data-act="reload">Reload data</button></div></div>';
+  }
+  return h + '</div>';
+}
+
+/* =============================== users (administrators) =============================== */
+const roleLabel = r => r === 'Admin' ? 'Administrator' : r;
+async function loadUsers() {
+  try { S.usersList = await call('listUsers'); if (S.view === 'users') main.innerHTML = viewUsers(); }
+  catch (e) { toast(errMsg(e), 6000); }
+}
+function viewUsers() {
+  const roleOpts = sel => ['Viewer', 'Editor', 'Admin'].map(r => '<option value="' + r + '"' + (r === sel ? ' selected' : '') + '>' + roleLabel(r) + '</option>').join('');
+  let h = '<div class="stack"><div class="card"><h2 class="sec">Add a person</h2>' +
+    '<form id="adduser" class="row" autocomplete="off">' +
+    '<input type="text" id="nu_name" placeholder="Username" aria-label="Username" required style="width:180px">' +
+    '<select id="nu_role" aria-label="Role">' + roleOpts('Viewer') + '</select>' +
+    '<input type="text" id="nu_pw" placeholder="Starting password (6+ characters)" aria-label="Starting password" required minlength="6" style="width:250px">' +
+    '<button class="pri" type="submit">Add account</button></form>' +
+    '<dl class="roles"><dt>Viewer</dt><dd>Sees the dashboard, item pages and history, and downloads Excel files. Cannot change anything.</dd>' +
+    '<dt>Editor</dt><dd>Everything a viewer can do, plus reviewing items, editing links and notes, importing, linking new YouTube videos and running checks.</dd>' +
+    '<dt>Administrator</dt><dd>Everything an editor can do, plus changing Settings and managing accounts on this page.</dd></dl></div>';
+  h += '<div class="card"><h2 class="sec">Accounts</h2>';
+  if (!S.usersList) return h + '<p class="muted">Loading accounts…</p></div></div>';
+  h += '<div class="tablewrap" style="box-shadow:none"><table class="users"><thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Last sign-in</th><th>Added</th><th></th></tr></thead><tbody>' +
+    S.usersList.map(u => {
+      const me = u.username.toLowerCase() === String(S.user).toLowerCase();
+      return '<tr><td><b>' + esc(u.username) + '</b>' + (me ? ' <span class="muted small">(you)</span>' : '') + '</td>' +
+        '<td><select data-act="urole" data-u="' + esc(u.username) + '" aria-label="Role for ' + esc(u.username) + '">' + roleOpts(u.role) + '</select></td>' +
+        '<td><select data-act="ustatus" data-u="' + esc(u.username) + '" aria-label="Status for ' + esc(u.username) + '">' +
+          ['Active', 'Disabled'].map(st => '<option' + (st === u.status ? ' selected' : '') + '>' + st + '</option>').join('') + '</select>' +
+          (u.status === 'Disabled' ? ' <span class="chip s-bad">Can\'t sign in</span>' : '') + '</td>' +
+        '<td>' + (u.last_login ? esc(new Date(u.last_login).toLocaleString()) : '<span class="muted">Never</span>') + '</td>' +
+        '<td class="small muted">' + day(u.created_at) + (u.created_by ? ' by ' + esc(u.created_by) : '') + '</td>' +
+        '<td><button class="sm" data-act="upw" data-u="' + esc(u.username) + '">Reset password</button></td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<p class="muted small" style="margin-bottom:0">Changes apply right away. A disabled account is signed out and cannot sign in until it is set back to Active. There must always be at least one active administrator.</p></div></div>';
+  return h;
+}
+async function saveUser(u, okMsg) {
+  try { S.usersList = await call('saveUser', u); toast(okMsg); }
+  catch (e) { toast(errMsg(e), 7000); }
+  if (S.view === 'users') main.innerHTML = viewUsers();
+}
+
+/* =============================== export =============================== */
+function exportSheets(list) {
+  const rv = (it, a) => it[a + '_reviewed_at'] ? isoDay(it[a + '_reviewed_at']) + ' ' + String(it[a + '_reviewed_by'] || '').split('@')[0] : '';
+  const main = [['Item #', 'Name', 'Product category', 'On price sheet',
+    'Photo link', 'Photo status', 'Photo note', 'Photo reviewed',
+    'Physical video link', 'Physical video status', 'Physical video note', 'Physical video quality', 'Physical video reviewed',
+    'Unbranded video link', 'Unbranded video status', 'Unbranded video note', 'Unbranded video quality', 'Unbranded video reviewed',
+    'YouTube link', 'YouTube status', 'YouTube note', 'YouTube title', 'YouTube channel', 'YouTube uploaded', 'YouTube quality', 'YouTube reviewed',
+    'Last social post', 'Social platform', 'Social note']];
+  list.forEach(it => main.push([
+    it.item_no, it.name, it.category, onSheet(it) ? 'Yes' : 'No',
+    it.photo_url, eff(it, 'photo'), it.photo_note, rv(it, 'photo'),
+    it.video_url, eff(it, 'video'), it.video_note, it.video_quality, rv(it, 'video'),
+    it.ub_url, eff(it, 'ub'), it.ub_note, it.ub_quality, rv(it, 'ub'),
+    it.yt_url, eff(it, 'yt'), it.yt_note, it.yt_title, it.yt_channel, isoDay(it.yt_published), it.yt_quality, rv(it, 'yt'),
+    isoDay(it.social_last_post), it.social_platform, it.social_note
+  ].map(v => v == null ? '' : String(v))));
+  const per = (a, extra) => [['Item #', 'Name', 'Product category', 'Link', 'Status', 'Note', 'Reviewed'].concat(extra.map(e => e[0]))]
+    .concat(list.map(it => [it.item_no, it.name, it.category, it[a + '_url'], eff(it, a), it[a + '_note'], rv(it, a)].concat(extra.map(e => e[1](it))).map(v => v == null ? '' : String(v))));
+  return [
+    { name: 'Portfolio', rows: main },
+    { name: 'Photos', rows: per('photo', [['Link updated', it => isoDay(it.photo_link_updated_at)]]) },
+    { name: 'Physical videos', rows: per('video', [['Quality', it => it.video_quality], ['Link updated', it => isoDay(it.video_link_updated_at)]]) },
+    { name: 'Unbranded videos', rows: per('ub', [['Quality', it => it.ub_quality], ['Link updated', it => isoDay(it.ub_link_updated_at)]]) },
+    { name: 'YouTube', rows: per('yt', [['Uploaded', it => isoDay(it.yt_published)], ['Channel', it => it.yt_channel], ['Quality', it => it.yt_quality], ['Title', it => it.yt_title], ['Link updated', it => isoDay(it.yt_link_updated_at)], ['Previous link', it => it.yt_prev_url]]) }
+  ];
+}
+function toWorkbook(sheets) {
+  const wb = XLSX.utils.book_new();
+  sheets.forEach(s => {
+    const ws = XLSX.utils.aoa_to_sheet(s.rows);
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    for (let r = 1; r <= range.e.r; r++) for (let c = 0; c <= range.e.c; c++) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c })];
+      if (cell && typeof cell.v === 'string' && /^https?:\/\//.test(cell.v)) cell.l = { Target: cell.v };
+    }
+    ws['!cols'] = s.rows[0].map((h, i) => ({ wch: Math.min(60, Math.max(10, String(h).length + 2, ...s.rows.slice(1, 200).map(r => String(r[i] || '').length))) }));
+    ws['!autofilter'] = { ref: ws['!ref'] };
+    XLSX.utils.book_append_sheet(wb, ws, s.name);
+  });
+  return wb;
+}
+async function doExport(kind) {
+  const list = kind.endsWith('all') ? S.items.slice() : filtered();
+  const fname = 'Marketing-Portfolio-' + (kind.endsWith('all') ? 'all' : String(S.filter).replace(/[^\w-]+/g, '-') + (S.cat ? '-' + S.cat.replace(/[^\w-]+/g, '-') : '')) + '-' + isoDay(new Date());
+  const sheets = exportSheets(list);
+  try {
+    if (kind.startsWith('xlsx')) { XLSX.writeFile(toWorkbook(sheets), fname + '.xlsx'); toast('Downloading ' + esc(fname) + '.xlsx'); }
+    else if (kind.startsWith('csv')) { XLSX.writeFile(toWorkbook([sheets[0]]), fname + '.csv', { bookType: 'csv' }); toast('Downloading ' + esc(fname) + '.csv'); }
+  } catch (e) { toast('Export failed: ' + errMsg(e), 7000); }
+}
+
+/* =============================== sign-in =============================== */
+function viewLogin(msg) {
+  $('#hdr').hidden = true;
+  main.innerHTML = '<form class="card login" id="loginform"><div class="brand">Marketing <span>Portfolio</span></div>' +
+    '<p class="muted" style="margin:0">Sign in with your username and password.</p>' +
+    (msg ? '<p class="err" style="margin:0" id="lg_err">' + esc(msg) + '</p>' : '') +
+    '<label for="lg_name">Username<input id="lg_name" type="text" autocomplete="username" autocapitalize="none" value="' + esc(AUTH.name) + '" required></label>' +
+    '<label for="lg_pw">Password<input id="lg_pw" type="password" autocomplete="current-password" required></label>' +
+    '<label class="row small" style="flex-direction:row;font-weight:400"><input type="checkbox" id="lg_rem" checked> Keep me signed in on this device for 30 days</label>' +
+    '<button class="pri" type="submit" id="lg_go">Sign in</button>' +
+    '<p class="muted small" style="margin:0">Forgot your password? Ask an administrator to reset it.</p>' +
+    (!SUPABASE_URL && isConnected() ? '<p class="muted small" style="margin:0">Test connection on this browser. <button type="button" class="linkbtn small" data-act="disconnect">Connect a different database</button></p>' : '') + '</form>';
+  (AUTH.name ? $('#lg_pw') : $('#lg_name')).focus();
+}
+function signOut(msg, tellServer) {
+  if (tellServer && AUTH.token && !DEMO) call('logout').catch(() => {});
+  AUTH.token = ''; store.del('mp_token');
+  S.usersList = null; S.role = ''; S.pwNudge = false;
+  viewLogin(msg);
+}
+async function start() {
+  if (DEMO) {
+    const bar = $('#demo-bar'); bar.hidden = false;
+    bar.textContent = 'Demo with sample data, signed in as Albert (Administrator). Item numbers, names and links are made up, and changes reset when you reload.';
+  } else if (!isConnected()) {
+    main.innerHTML = '<form class="card login" id="connectform"><div class="brand">Marketing <span>Portfolio</span></div>' +
+      '<p style="margin:0">This page isn\'t connected to your Supabase database yet. Find both values in Supabase → Project Settings → API Keys / Data API.</p>' +
+      '<label for="cn_url">Project URL<input id="cn_url" type="url" required placeholder="https://abcdefghijkl.supabase.co"></label>' +
+      '<label for="cn_key">Publishable (or anon public) key<input id="cn_key" type="text" required placeholder="sb_publishable_… or eyJ…" autocomplete="off"></label>' +
+      '<button class="pri" type="submit">Connect</button>' +
+      '<p class="muted small" style="margin:0">This connects only this browser, for testing. For the live page, paste the same two values into <code>SUPABASE_URL</code> and <code>SUPABASE_KEY</code> near the top of index.html.</p></form>';
+    return;
+  } else if (!AUTH.token) { viewLogin(); return; }
+  main.innerHTML = '<div id="loading">Loading portfolio…</div>';
+  try {
+    setData(await call('getData'));
+    $('#hdr').hidden = false;
+    routeFromHash();
+    setTimeout(autoJobs, 1500);
+  } catch (e) {
+    if (e.auth) signOut(/sign-in has ended/.test(e.message) && !AUTH.token ? '' : e.message);
+    else main.innerHTML = '<div class="card login"><h2 class="sec" style="margin:0">Could not load the portfolio</h2><p class="err" style="margin:0">' + errMsg(e) + '</p><button class="pri" data-act="retry">Try again</button></div>';
+  }
+}
+
+/* Daily channel scan and weekly YouTube refresh, run quietly when an editor opens the page. */
+async function autoJobs() {
+  if (DEMO || !canEdit() || !String(S.settings.youtube_api_key || '').trim()) return;
+  const stale = (k, hours) => { const t = new Date(S.settings[k] || 0); return isNaN(t) || Date.now() - t > hours * 36e5; };
+  try {
+    if (stale('last_scan', 20)) {
+      const r = await call('scanChannels');
+      if (r.added) { await reload(); toast(r.added + ' new YouTube upload(s) found on your channels. See New videos.', 7000); }
+    }
+    if (stale('last_refresh', 24 * 7)) { await call('refreshYouTube'); if (S.view !== 'item') render(); }
+  } catch (e) { console.warn('Automatic YouTube check skipped:', e.message); }
+}
+
+/* =============================== events =============================== */
+document.addEventListener('submit', async e => {
+  const f = e.target;
+  if (f.id === 'loginform') {
+    e.preventDefault();
+    const btn = $('#lg_go'); btn.disabled = true; btn.textContent = 'Signing in…';
+    const name = $('#lg_name').value.trim(), pw = $('#lg_pw').value, rem = $('#lg_rem').checked;
+    try {
+      const r = await call('login', name, pw, rem);
+      AUTH.token = r.token; AUTH.name = r.user.username;
+      store.set('mp_user', AUTH.name);
+      if (rem) store.set('mp_token', AUTH.token); else store.del('mp_token');
+      S.pwNudge = !!r.startingPassword;
+      start();
+    } catch (err) {
+      viewLogin(err.message);
+      $('#lg_name').value = name;
+    }
+  } else if (f.id === 'connectform') {
+    e.preventDefault();
+    const u = $('#cn_url').value.trim().replace(/\/(rest\/v1|auth\/v1)?\/*$/, ''), k = $('#cn_key').value.trim();
+    if (!/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(u) && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(u)) { toast('That doesn\'t look like a Supabase project URL. It should look like https://abcdefghijkl.supabase.co', 8000); return; }
+    if (k.length < 20) { toast('That key looks too short. Copy the whole publishable (or anon public) key.', 7000); return; }
+    memConf = { url: u, key: k }; store.set('mp_sb_url', u); store.set('mp_sb_key', k);
+    start();
+  } else if (f.id === 'pwform') {
+    e.preventDefault();
+    const cur = $('#pw_cur').value, a = $('#pw_new').value, b = $('#pw_new2').value;
+    if (a !== b) { toast('The two new passwords don\'t match.'); return; }
+    try { await call('changePassword', cur, a); S.pwNudge = false; f.reset(); toast('Password changed'); }
+    catch (err) { toast(errMsg(err), 6000); }
+  } else if (f.id === 'adduser') {
+    e.preventDefault();
+    const name = $('#nu_name').value.trim(), role = $('#nu_role').value, pw = $('#nu_pw').value;
+    await saveUser({ username: name, role: role, password: pw, isNew: true }, 'Added ' + esc(name) + ' as ' + esc(roleLabel(role)) + '. Send them their username and starting password.');
+  }
+});
+document.addEventListener('click', async e => {
+  const g = e.target.closest('[data-go]');
+  if (g) { e.preventDefault(); go(g.dataset.go); return; }
+  const el = e.target.closest('[data-act]');
+  if (!el || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && el.type !== 'checkbox')) return;
+  const act = el.dataset.act, no = el.dataset.no;
+  switch (act) {
+    case 'retry': start(); break;
+    case 'applywb': {
+      if (!S.wb) break;
+      el.disabled = true; el.textContent = 'Loading…';
+      try {
+        const r = await call('importWorkbook', S.wb, $('#wboff') && $('#wboff').checked);
+        S.wb = null; await reload();
+        const msg = 'Loaded ' + nf(r.items) + ' items' + (r.categories ? ' and ' + r.categories + ' categories' : '') + (r.markedOff ? '. ' + r.markedOff + ' marked off the price sheet' : '') + '.';
+        if (S.settings.youtube_api_key) {
+          toast(msg + ' Filling in YouTube details…', 20000);
+          try { const y = await call('refreshYouTube'); toast(msg + ' YouTube details filled in for ' + nf(y.changed) + ' item(s).', 9000); }
+          catch (err) { toast(msg + ' YouTube details could not be filled in: ' + errMsg(err), 12000); }
+          if (S.view !== 'item') render();
+        } else toast(msg + ' Next: add the YouTube API key in Settings so titles and upload dates fill in.', 12000);
+      } catch (err) { toast(errMsg(err), 8000); el.disabled = false; el.textContent = 'Try again'; }
+      break;
+    }
+    case 'editlink': S.editLink = norm(no) + '|' + el.dataset.k; refreshCards(no); { const i = document.getElementById('url-' + el.dataset.k); if (i) { i.focus(); i.select(); } } break;
+    case 'canceledit': S.editLink = ''; if (document.activeElement) document.activeElement.blur(); refreshCards(no); break;
+    case 'quality': {
+      const it = getItem(no), f = el.dataset.k + '_quality';
+      save(no, { [f]: it[f] === el.dataset.v ? '' : el.dataset.v }, true); break;
+    }
+    case 'disconnect': memConf = {}; store.del('mp_sb_url'); store.del('mp_sb_key'); store.del('mp_token'); AUTH.token = ''; start(); break;
+    case 'theme': setTheme(isDark() ? 'light' : 'dark'); break;
+    case 'themeset': setTheme(el.dataset.v); break;
+    case 'logout': signOut('', true); break;
+    case 'upw': {
+      const u = el.dataset.u;
+      const pw = await ask('Reset password for ' + u, 'Type a new starting password and send it to ' + esc(u) + '. They will be signed out everywhere.', 'Reset password', 'New password (at least 6 characters)');
+      if (pw != null) await saveUser({ username: u, password: pw }, 'Password reset for ' + esc(u));
+      break;
+    }
+    case 'openfilter': S.filter = el.dataset.f; S.search = ''; $('#q').value = ''; go('items'); break;
+    case 'priceonly': S.priceOnly = el.checked; render(); break;
+    case 'layout': S.layout = el.dataset.v; render(); break;
+    case 'size': S.size = el.dataset.v; render(); break;
+    case 'more': S.shown = 1e9; render(); break;
+    case 'open':
+      S.queue = filtered().map(it => it.item_no);
+      S.queueLabel = getFilter(S.filter)[1] + (S.search ? ' · search "' + S.search + '"' : '');
+      openItem(no, false); break;
+    case 'prev': step(-1); break;
+    case 'next': step(1); break;
+    case 'jump': { const c = document.getElementById('card-' + el.dataset.k); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); break; }
+    case 'history': showHistory(no); break;
+    case 'status': save(no, { [el.dataset.k + '_status']: el.dataset.v }, true); break;
+    case 'saveurl': {
+      const k = el.dataset.k, v = document.getElementById('url-' + k).value.trim();
+      const before = (getItem(no) || {})[k + '_url'] || '';
+      el.disabled = true; el.textContent = 'Saving…';
+      S.editLink = '';
+      if (document.activeElement) document.activeElement.blur();
+      await save(no, { [k + '_url']: v }, true);
+      if (v !== before && (getItem(no) || {})[k + '_url'] === v) toast((k === 'yt' ? 'YouTube link' : 'Link') + ' updated for ' + esc(no));
+      break;
+    }
+    case 'allgood': {
+      const it = getItem(no), patch = {};
+      ASSETS.forEach(a => { if (it[a.k + '_url']) patch[a.k + '_status'] = 'Acceptable'; });
+      if (!Object.keys(patch).length) { toast('This item has no links yet.'); break; }
+      save(no, patch, true); toast('Marked ' + esc(no) + ' acceptable'); step(1); break;
+    }
+    case 'toggleprice': save(no, { on_price_sheet: el.checked ? 'Yes' : 'No' }); break;
+    case 'postedtoday': save(no, { social_last_post: isoDay(new Date()) }); break;
+    case 'embed': {
+      const it = getItem(no), box = el.closest('.prev');
+      if (DEMO) { box.innerHTML = '<span style="padding:16px">The video plays right here on your live page.</span>'; break; }
+      if (el.dataset.k === 'yt') box.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + esc(it.yt_id) + '?autoplay=1" allow="autoplay; encrypted-media; fullscreen" allowfullscreen title="YouTube video"></iframe>';
+      else {
+        const d = driveId(it.video_url);
+        box.innerHTML = d ? '<iframe src="https://drive.google.com/file/d/' + esc(d) + '/preview" allow="autoplay; fullscreen" allowfullscreen title="Video preview"></iframe>'
+          : '<video controls autoplay src="' + esc(it.video_url) + '"></video>';
+      }
+      break;
+    }
+    case 'scan': case 'job': {
+      const fn = act === 'scan' ? 'scanChannels' : el.dataset.fn;
+      el.disabled = true; const txt = el.textContent; el.textContent = 'Working… this can take a minute';
+      try {
+        const r = await call(fn);
+        await reload();
+        toast(fn === 'scanChannels' ? 'Scan finished: ' + r.added + ' new video(s)' + (r.errors.length ? '. Problems: ' + esc(r.errors.join('; ')) : '')
+          : 'Checked ' + nf(r.refreshed) + ' YouTube video(s), ' + nf(r.changed) + ' updated', 7000);
+      } catch (err) { toast(errMsg(err), 7000); el.disabled = false; el.textContent = txt; }
+      break;
+    }
+    case 'reload': toast('Reloading…'); try { await reload(); toast('Up to date'); } catch (err) { toast(errMsg(err), 6000); } break;
+    case 'vlink': {
+      const id = el.dataset.id, inp = document.querySelector('input[data-id="' + id + '"]');
+      linkPairs([{ video_id: id, item_no: inp.value.trim() }]); break;
+    }
+    case 'linkall': {
+      const pairs = [];
+      $$('input[data-act="vitem"]').forEach(i => { if (i.value.trim()) pairs.push({ video_id: i.dataset.id, item_no: i.value.trim() }); });
+      if (!pairs.length) { toast('No item numbers filled in.'); break; }
+      if (await ask('Link ' + pairs.length + ' videos?', 'Each video becomes its item\'s YouTube link. The old link is kept as "previous" and the item goes back to Unreviewed.', 'Link ' + pairs.length)) linkPairs(pairs);
+      break;
+    }
+    case 'vignore': {
+      const id = el.dataset.id;
+      try { await call('ignoreVideos', [id]); S.videos = S.videos.filter(v => v.video_id !== id); setBadge(); render(); } catch (err) { toast(errMsg(err)); }
+      break;
+    }
+    case 'parsepaste': S.preview = parsePaste($('#paste').value, $('#ptype').value); $('#pv').innerHTML = previewHtml(); break;
+    case 'clearpv': S.preview = []; $('#pv').innerHTML = ''; break;
+    case 'previewfile': {
+      const ic = +$('#lic').value, body = FILE_L.rows.slice(FILE_L.hi + 1), rows = [];
+      const cols = $$('[data-lcol]').filter(s => s.value).map(s => [+s.dataset.lcol, s.value]);
+      body.forEach(r => cols.forEach(([c, t]) => {
+        const url = String(r[c] || '').trim();
+        if (/^https?:\/\//i.test(url)) rows.push({ item_no: String(r[ic] || '').trim(), url, type: t });
+      }));
+      S.preview = rows; $('#pv').innerHTML = previewHtml(); $('#pv').scrollIntoView({ behavior: 'smooth' });
+      break;
+    }
+    case 'applypv': {
+      const rows = S.preview.filter(r => rowState(r)[2]);
+      el.disabled = true; el.textContent = 'Applying…';
+      try {
+        const r = await call('importLinks', rows);
+        S.preview = []; await reload();
+        toast('Updated ' + r.updated + ' link(s)' + (r.same ? ', ' + r.same + ' unchanged' : '') + (r.notFound.length ? ', ' + r.notFound.length + ' item(s) not found' : '') +
+          (r.unmatched.length ? ', ' + r.unmatched.length + ' YouTube link(s) with no item # in the title' : ''), 8000);
+      } catch (err) { toast(errMsg(err), 7000); el.disabled = false; }
+      break;
+    }
+    case 'applymaster': {
+      const ic = +$('#mic').value, nc = +$('#mnc').value, cc = +$('#mcc').value;
+      const rows = FILE_M.rows.slice(FILE_M.hi + 1).map(r => ({ item_no: String(r[ic] || '').trim(), name: nc >= 0 ? String(r[nc] || '').trim() : '', category: cc >= 0 ? String(r[cc] || '').trim() : '' })).filter(r => r.item_no);
+      const off = $('#moff').checked;
+      if (off && !(await ask('Update the price sheet?', 'Items that are not in this file will be marked "not on price sheet". They stay in the tracker and are hidden from the dashboard by default.', 'Import ' + nf(rows.length) + ' items'))) break;
+      el.disabled = true; el.textContent = 'Importing…';
+      try {
+        const r = await call('importItems', rows, off);
+        await reload();
+        toast('Item list imported: ' + r.created + ' new, ' + r.updated + ' updated' + (r.markedOff ? ', ' + r.markedOff + ' marked off the price sheet' : ''), 7000);
+      } catch (err) { toast(errMsg(err), 7000); el.disabled = false; el.textContent = 'Import item list'; }
+      break;
+    }
+    case 'savesettings': {
+      const obj = {
+        review_months: +$('#st_rm').value || 6, youtube_years: +$('#st_yy').value || 3,
+        channels: $('#st_ch').value.trim()
+      };
+      if ($('#st_key')) obj.youtube_api_key = $('#st_key').value.trim();
+      try { S.settings = await call('saveSettings', obj); CUT = new Date(new Date().getFullYear() - S.settings.youtube_years, 0, 1); render(); toast('Settings saved'); }
+      catch (err) { toast(errMsg(err)); }
+      break;
+    }
+  }
+});
+document.addEventListener('change', async e => {
+  const el = e.target, act = el.dataset.act;
+  if (act === 'setfilter') { S.filter = el.value; S.shown = 300; render(); }
+  else if (act === 'setcat') { S.cat = el.value; S.shown = 300; render(); }
+  else if (act === 'urole' || act === 'ustatus') {
+    const u = el.dataset.u, me = u.toLowerCase() === String(S.user).toLowerCase(), v = el.value;
+    if (me && ((act === 'urole' && v !== 'Admin') || (act === 'ustatus' && v === 'Disabled'))) {
+      const ok = await ask(act === 'urole' ? 'Change your own role?' : 'Disable your own account?', act === 'urole'
+        ? 'You will lose access to Settings and this Users page right away.' : 'You will be signed out and will not be able to sign back in.', 'Yes, continue');
+      if (!ok) { main.innerHTML = viewUsers(); return; }
+    }
+    const patch = { username: u }; patch[act === 'urole' ? 'role' : 'status'] = v;
+    await saveUser(patch, esc(u) + (act === 'urole' ? ' is now ' + (v === 'Admin' ? 'an Administrator' : 'a' + (v === 'Editor' ? 'n ' : ' ') + v) : ' is now ' + v));
+    if (me) { try { setData(await call('getData')); } catch (err) { if (err.auth) { signOut(err.message); return; } } routeFromHash(); }
+  }
+  else if (act === 'export') { const v = el.value; el.value = ''; if (v) doExport(v); }
+  else if (act === 'set' || act === 'note') save(el.dataset.no, { [el.dataset.f]: el.value }, true);
+  else if (act === 'vitem') { S.vsel[el.dataset.id] = el.value.trim(); render(); }
+  else if (el.id === 'wbfile' && el.files[0]) {
+    const file = el.files[0];
+    try {
+      const wb = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => { try { res(XLSX.read(new Uint8Array(fr.result), { type: 'array', cellDates: true })); } catch (er) { rej(er); } }; fr.onerror = () => rej(fr.error); fr.readAsArrayBuffer(file); });
+      S.wb = parseWorkbook(wb, file.name);
+      const isNew = S.wb.items.filter(x => !getItem(x.item_no)).length;
+      $('#wbsum').innerHTML = '<div class="stack" style="margin-top:12px"><div><b>' + nf(S.wb.items.length) + ' items</b> found (' + nf(isNew) + ' new, ' + nf(S.wb.items.length - isNew) + ' already here)' +
+        (S.wb.categories.length ? ', plus <b>' + nf(S.wb.categories.length) + ' categories</b>' : '') + '.</div>' +
+        '<div class="small muted">Columns used: ' + esc(S.wb.known.join(', ')) + '</div>' +
+        (S.wb.extraCols.length ? '<div class="small muted">Kept as price-list details on each item: ' + esc(S.wb.extraCols.join(', ')) + '</div>' : '') +
+        '<label class="small row"><input type="checkbox" id="wboff"> Mark items that are not in this file as "not on price sheet"</label>' +
+        '<div><button class="pri" data-act="applywb">Load ' + nf(S.wb.items.length) + ' items</button></div></div>';
+    } catch (err) { $('#wbsum').innerHTML = '<p class="err">' + errMsg(err) + '</p>'; }
+  }
+  else if (el.id === 'mfile' && el.files[0]) { try { mapMaster(await readFileRows(el.files[0])); } catch (err) { toast('Could not read that file: ' + errMsg(err)); } }
+  else if (el.id === 'lfile' && el.files[0]) { try { mapLinks(await readFileRows(el.files[0])); } catch (err) { toast('Could not read that file: ' + errMsg(err)); } }
+});
+let qT;
+$('#q').addEventListener('input', e => {
+  clearTimeout(qT);
+  qT = setTimeout(() => { S.search = e.target.value; S.shown = 300; if (S.view !== 'items') go('items'); else render(); }, 200);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('#modal').hidden) { const n = $('#m_no'); if (n) n.click(); return; }
+  if (S.view !== 'item' || (e.target.closest && e.target.closest('input,textarea,select'))) return;
+  if (e.key === 'ArrowRight') step(1);
+  if (e.key === 'ArrowLeft') step(-1);
+});
+let tx = null, ty = null;
+main.addEventListener('touchstart', e => {
+  if (S.view !== 'item' || (e.target.closest && e.target.closest('input,textarea,select,iframe,video,.noswipe'))) { tx = null; return; }
+  tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+}, { passive: true });
+main.addEventListener('touchend', e => {
+  if (tx == null) return;
+  const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+  tx = null;
+  if (Math.abs(dx) > 70 && Math.abs(dy) < 60) step(dx < 0 ? 1 : -1);
+});
+
+updateThemeBtn();
+start();
+</script>
+</body>
+</html>
