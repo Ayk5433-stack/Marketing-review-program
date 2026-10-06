@@ -199,6 +199,9 @@ td .mini{width:64px;height:40px;object-fit:cover;border-radius:4px;display:block
 .naline{font-size:13px;color:var(--muted);padding:10px 12px;border:1px dashed var(--line);border-radius:8px}
 .naopts{margin-top:6px}
 .wgroups{display:grid;gap:12px}
+.rfgroup{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+.rfgroup select{max-width:260px}
+tr.kept td{opacity:.75}
 .wglabel{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px}
 .segpick small{opacity:.65;font-weight:500}
 .desc{white-space:pre-wrap;margin:0;line-height:1.5}
@@ -291,7 +294,7 @@ body.waiting{cursor:progress}
 /* =============================== state =============================== */
 const S = {
   items: [], byNo: {}, videos: [], settings: {}, user: '', lastJob: '',
-  view: 'dash', filter: 'all', search: '', priceOnly: true, cat: '', categories: [], layout: 'table', size: 'm', seg: '',
+  view: 'dash', filter: 'all', search: '', priceOnly: true, cat: '', categories: [], layout: 'table', size: 'm', seg: '', rfWhich: 'item', rfState: '', keep: new Set(), keptN: 0,
   queue: [], qi: 0, queueLabel: '', shown: 300, preview: [], vsel: {}
 };
 const DEMO = typeof window.DEMO_API === 'function';
@@ -846,6 +849,47 @@ function normSeg(v) {
   return '';
 }
 const PASS_ASSETS = ['photo', 'video', 'yt'];
+/* Review status of one asset, in plain words. */
+const reviewedA = (it, a) => !!(it[a + '_url'] && it[a + '_status']);
+function assetState(it, a) {
+  const e = eff(it, a), st = it[a + '_status'] || '';
+  return {
+    reviewed: reviewedA(it, a), notReviewed: !!it[a + '_url'] && !st,
+    acceptable: !!it[a + '_url'] && st === 'Acceptable', needsUpdate: st === 'Needs update' && !!it[a + '_url'], unacceptable: st === 'Unacceptable' && !!it[a + '_url'],
+    failed: (!!it[a + '_url'] && BAD.has(st)) || e === 'Expired', missing: e === 'Missing', notNeeded: e === 'Not needed', due: e === 'Review due', expired: e === 'Expired'
+  };
+}
+/* Item-level review progress over the three that count. */
+function reviewProgress(it) {
+  const need = PASS_ASSETS.filter(a => eff(it, a) !== 'Not needed');
+  const done = need.filter(a => reviewedA(it, a)).length;
+  if (!need.length || done === need.length) return 'All reviewed';
+  return done ? 'Partly reviewed (' + done + ' of ' + need.length + ')' : 'Not reviewed';
+}
+const RF_WHICH = [['item', 'Whole item'], ['photo', 'Photo'], ['video', 'Physical video'], ['yt', 'YouTube'], ['ub', 'Unbranded video']];
+const RF_ITEM = [['', 'Any status'], ['reviewed', 'Fully reviewed'], ['partly', 'Partly reviewed'], ['notreviewed', 'Not reviewed at all'], ['passed', 'Passed (all acceptable)'], ['failed', 'Failed (needs update / unacceptable)'], ['progress', 'Not passed yet (in progress)']];
+const RF_ASSET = [['', 'Any status'], ['reviewed', 'Reviewed'], ['notreviewed', 'Not reviewed yet'], ['acceptable', 'Acceptable (passed)'], ['needsUpdate', 'Needs update'], ['unacceptable', 'Unacceptable'], ['failed', 'Failed (needs update or unacceptable)'], ['due', 'Review due again'], ['missing', 'Missing link'], ['notNeeded', 'Not needed']];
+function rfTest(it) {
+  const w = S.rfWhich || 'item', v = S.rfState || '';
+  if (!v) return true;
+  if (w === 'item') {
+    const r = itemResult(it).r, p = reviewProgress(it);
+    return v === 'reviewed' ? p === 'All reviewed' : v === 'partly' ? /^Partly/.test(p) : v === 'notreviewed' ? p === 'Not reviewed'
+      : v === 'passed' ? r === 'Passed' : v === 'failed' ? r === 'Failed' : v === 'progress' ? r !== 'Passed' : true;
+  }
+  if (w === 'yt' && v === 'acceptable') return eff(it, 'yt') === 'Acceptable' || eff(it, 'yt') === 'Review due';
+  return !!assetState(it, w)[v];
+}
+function rfSelects() {
+  const w = S.rfWhich || 'item', opts = w === 'item' ? RF_ITEM : RF_ASSET;
+  return '<span class="rfgroup"><label class="small muted" for="rfw">Review status</label><select id="rfw" data-act="rfwhich" aria-label="Which part">' + RF_WHICH.map(x => '<option value="' + x[0] + '"' + (x[0] === w ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select>' +
+    '<select id="rfs" data-act="rfstate" aria-label="Status">' + opts.map(x => '<option value="' + x[0] + '"' + (x[0] === (S.rfState || '') ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select></span>';
+}
+/* Sort: still needs reviewing first, then reviewed-but-not-passed, then passed. */
+function workRank(it) {
+  if (isReady(it)) return 2;
+  return PASS_ASSETS.some(a => { const e = eff(it, a); return e === 'Unreviewed' || e === 'Review due' || e === 'Missing'; }) ? 0 : 1;
+}
 const PASS_LABEL = { photo: 'Photo', video: 'Physical video', yt: 'YouTube' };
 function itemResult(it) {
   const st = PASS_ASSETS.map(a => [a, eff(it, a)]);
@@ -914,16 +958,24 @@ function catSelect(id) {
 function filtered() {
   const f = getFilter(S.filter)[2];
   const q = S.search.trim().toLowerCase();
-  const out = scoped().filter(it => f(it) && (!q ||
+  const kept = [];
+  const out = scoped().filter(it => {
+    const hit = !q ||
     String(it.item_no).toLowerCase().includes(q) ||
     String(it.name).toLowerCase().includes(q) ||
     String(it.category).toLowerCase().includes(q) ||
     String(it.yt_title).toLowerCase().includes(q) ||
-    (it.extra && JSON.stringify(it.extra).toLowerCase().includes(q))));
-  // still-to-do first, marketing-ready last (otherwise keep the usual order)
-  const todo = [], done = [];
-  out.forEach(it => (isReady(it) ? done : todo).push(it));
-  return todo.concat(done);
+    (it.extra && JSON.stringify(it.extra).toLowerCase().includes(q));
+    if (!hit) return false;
+    if (f(it) && rfTest(it)) return true;
+    if (S.keep.has(norm(it.item_no))) { kept.push(it); }   // reviewed while this list was open: keep it, at the bottom
+    return false;
+  });
+  // still to review first, reviewed-but-not-passed next, marketing-ready last; items you just reviewed stay at the very bottom
+  const groups = [[], [], []];
+  out.forEach(it => groups[workRank(it)].push(it));
+  S.keptN = kept.length;
+  return groups[0].concat(groups[1], groups[2], kept);
 }
 
 /* =============================== data =============================== */
@@ -1073,7 +1125,7 @@ function filterSelect() {
 }
 function viewItems() {
   const list = filtered();
-  let h = '<div class="toolbar">' + segPicker() + '</div><div class="toolbar">' + filterSelect() + catSelect('icat') +
+  let h = '<div class="toolbar">' + segPicker() + rfSelects() + '</div><div class="toolbar">' + filterSelect() + catSelect('icat') +
     '<label class="row small"><input type="checkbox" data-act="priceonly"' + (S.priceOnly ? ' checked' : '') + '> Price sheet only</label>' +
     '<span class="seg"><button data-act="layout" data-v="table" class="' + (S.layout === 'table' ? 'on' : '') + '">List</button>' +
     '<button data-act="layout" data-v="grid" class="' + (S.layout === 'grid' ? 'on' : '') + '">Grid</button></span>' +
@@ -1086,7 +1138,8 @@ function viewItems() {
     '<option value="csv-view">CSV: this view</option>' +
     '</select></div>';
   const doneN = list.filter(isReady).length;
-  h += '<div class="muted small" style="margin-bottom:8px">' + nf(list.length) + ' item(s)' + (doneN && doneN < list.length ? ' · items that still need work are listed first; ' + nf(doneN) + ' marketing-ready item(s) are at the bottom' : '') + '</div>';
+  h += '<div class="muted small" style="margin-bottom:8px">' + nf(list.length) + ' item(s) · still to review first' + (doneN ? ', ' + nf(doneN) + ' marketing-ready at the bottom' : '') +
+    (S.keptN ? ' · <b>' + nf(S.keptN) + ' item(s) you reviewed are kept at the very bottom</b> (they no longer match this filter)' : '') + '</div>';
   const shown = list.slice(0, S.shown);
   if (!list.length) return h + '<div class="card muted">Nothing matches this view.</div>';
   if (S.layout === 'grid') {
@@ -1095,8 +1148,9 @@ function viewItems() {
     h += '<div class="tablewrap"><table><thead><tr><th></th><th>Item #</th><th>Name</th><th>Category</th><th>Type</th><th>Item result</th>' + ASSETS.map(a => '<th>' + a.label + '</th>').join('') + '<th>YT uploaded</th></tr></thead><tbody>' +
       shown.map(it => {
         const th = thumbOf(it);
-        return '<tr class="click" data-act="open" data-no="' + esc(it.item_no) + '"><td>' + (th ? '<img class="mini" loading="lazy" alt="" src="' + esc(th) + '" onerror="this.style.visibility=\'hidden\'">' : '<div class="mini"></div>') + '</td>' +
-          '<td class="mono">' + esc(it.item_no) + '</td><td>' + esc(it.name) + '</td><td>' + esc(it.category) + '</td><td class="small">' + SEG_LABEL[segOf(it)] + '</td><td>' + (r => '<span class="chip s-' + RESULT_CLS[r] + '">' + r + '</span>')(itemResult(it).r) + '</td>' +
+        const kept = S.keep.has(norm(it.item_no)) && !(getFilter(S.filter)[2](it) && rfTest(it));
+        return '<tr class="click' + (kept ? ' kept' : '') + '" data-act="open" data-no="' + esc(it.item_no) + '"><td>' + (th ? '<img class="mini" loading="lazy" alt="" src="' + esc(th) + '" onerror="this.style.visibility=\'hidden\'">' : '<div class="mini"></div>') + '</td>' +
+          '<td class="mono">' + esc(it.item_no) + '</td><td>' + esc(it.name) + '</td><td>' + esc(it.category) + '</td><td class="small">' + SEG_LABEL[segOf(it)] + '</td><td>' + (kept ? '<span class="small muted">✓ reviewed just now</span><br>' : '') + (r => '<span class="chip s-' + RESULT_CLS[r] + '">' + r + '</span>')(itemResult(it).r) + '</td>' +
           ASSETS.map(a => '<td>' + chip(eff(it, a.k)) + '</td>').join('') +
           '<td>' + day(it.yt_published) + '</td></tr>';
       }).join('') + '</tbody></table></div>';
@@ -1279,6 +1333,7 @@ async function save(no, patch, quiet) {
   refreshCards(no);
   try {
     const fresh = await call('saveItem', it.item_no, patch, backup);
+    S.keep.add(norm(it.item_no));
     replaceItem(fresh);
     refreshCards(no);
     if (!quiet) toast('Saved ' + esc(it.item_no));
@@ -1606,29 +1661,32 @@ async function saveUser(u, okMsg) {
 
 /* =============================== export =============================== */
 function exportSheets(list) {
+  list = list.slice().sort((a, b) => natural(a.item_no, b.item_no));
+  const yn = (it, a) => it[a + '_url'] ? (reviewedA(it, a) ? 'Yes' : 'No') : (eff(it, a) === 'Not needed' ? 'Not needed' : 'No link');
+  const pf = (it, a) => { const e = eff(it, a); return e === 'Acceptable' ? 'Passed' : e === 'Not needed' ? 'Not needed' : (BAD.has(e) || e === 'Expired') ? 'Failed' : e === 'Missing' ? 'Missing' : e === 'Review due' ? 'Review due again' : 'Not reviewed'; };
   const rv = (it, a) => it[a + '_reviewed_at'] ? isoDay(it[a + '_reviewed_at']) + ' ' + String(it[a + '_reviewed_by'] || '').split('@')[0] : '';
-  const main = [['Item #', 'Name', 'Product category', 'Type', 'On price sheet', 'Item result', 'What is left',
-    'Photo link', 'Photo status', 'Photo note', 'Photo reviewed',
-    'Physical video link', 'Physical video status', 'Physical video note', 'Physical video quality', 'Physical video reviewed',
-    'YouTube link', 'YouTube result', 'YouTube status', 'YouTube note', 'YouTube title', 'YouTube channel', 'YouTube uploaded', 'YouTube quality', 'YouTube reviewed',
-    'Unbranded video link', 'Unbranded video status', 'Unbranded video note', 'Unbranded video quality', 'Unbranded video reviewed',
+  const main = [['Item #', 'Name', 'Product category', 'Type', 'On price sheet', 'Item result', 'Review progress', 'What is left',
+    'Photo link', 'Photo reviewed?', 'Photo result', 'Photo status', 'Photo note', 'Photo reviewed on / by',
+    'Physical video link', 'Physical video reviewed?', 'Physical video result', 'Physical video status', 'Physical video note', 'Physical video quality', 'Physical video reviewed on / by',
+    'YouTube link', 'YouTube reviewed?', 'YouTube result', 'YouTube status', 'YouTube note', 'YouTube title', 'YouTube channel', 'YouTube uploaded', 'YouTube quality', 'YouTube reviewed on / by',
+    'Unbranded video link', 'Unbranded video reviewed?', 'Unbranded video result', 'Unbranded video status', 'Unbranded video note', 'Unbranded video quality', 'Unbranded video reviewed on / by',
     'Description', 'Suggested description', 'Suggested by']];
   list.forEach(it => main.push([
-    it.item_no, it.name, it.category, SEG_LABEL[segOf(it)], onSheet(it) ? 'Yes' : 'No', itemResult(it).r, itemResult(it).why,
-    it.photo_url, eff(it, 'photo'), it.photo_note, rv(it, 'photo'),
-    it.video_url, eff(it, 'video'), it.video_note, it.video_quality, rv(it, 'video'),
-    it.yt_url, ytResult(it), eff(it, 'yt'), it.yt_note, it.yt_title, it.yt_channel, isoDay(it.yt_published), it.yt_quality, rv(it, 'yt'),
-    it.ub_url, eff(it, 'ub'), it.ub_note, it.ub_quality, rv(it, 'ub'),
+    it.item_no, it.name, it.category, SEG_LABEL[segOf(it)], onSheet(it) ? 'Yes' : 'No', itemResult(it).r, reviewProgress(it), itemResult(it).why,
+    it.photo_url, yn(it, 'photo'), pf(it, 'photo'), eff(it, 'photo'), it.photo_note, rv(it, 'photo'),
+    it.video_url, yn(it, 'video'), pf(it, 'video'), eff(it, 'video'), it.video_note, it.video_quality, rv(it, 'video'),
+    it.yt_url, yn(it, 'yt'), pf(it, 'yt'), eff(it, 'yt'), it.yt_note, it.yt_title, it.yt_channel, isoDay(it.yt_published), it.yt_quality, rv(it, 'yt'),
+    it.ub_url, yn(it, 'ub'), pf(it, 'ub'), eff(it, 'ub'), it.ub_note, it.ub_quality, rv(it, 'ub'),
     descOf(it), it.desc_suggested, it.desc_suggested ? (it.desc_suggested_by || '') + ' ' + isoDay(it.desc_suggested_at) : ''
   ].map(v => v == null ? '' : String(v))));
-  const per = (a, extra) => [['Item #', 'Name', 'Product category', 'Type', 'Link', 'Status', 'Note', 'Reviewed'].concat(extra.map(e => e[0]))]
-    .concat(list.map(it => [it.item_no, it.name, it.category, SEG_LABEL[segOf(it)], it[a + '_url'], eff(it, a), it[a + '_note'], rv(it, a)].concat(extra.map(e => e[1](it))).map(v => v == null ? '' : String(v))));
+  const per = (a, extra) => [['Item #', 'Name', 'Product category', 'Type', 'Link', 'Reviewed?', 'Result', 'Status', 'Note', 'Reviewed on / by'].concat(extra.map(e => e[0]))]
+    .concat(list.map(it => [it.item_no, it.name, it.category, SEG_LABEL[segOf(it)], it[a + '_url'], yn(it, a), pf(it, a), eff(it, a), it[a + '_note'], rv(it, a)].concat(extra.map(e => e[1](it))).map(v => v == null ? '' : String(v))));
   return [
     { name: 'Portfolio', rows: main },
     { name: 'Photos', rows: per('photo', [['Link updated', it => isoDay(it.photo_link_updated_at)]]) },
     { name: 'Physical videos', rows: per('video', [['Quality', it => it.video_quality], ['Link updated', it => isoDay(it.video_link_updated_at)]]) },
-    { name: 'Unbranded videos', rows: per('ub', [['Quality', it => it.ub_quality], ['Link updated', it => isoDay(it.ub_link_updated_at)]]) },
-    { name: 'YouTube', rows: per('yt', [['YouTube result', ytResult], ['Uploaded', it => isoDay(it.yt_published)], ['Channel', it => it.yt_channel], ['Quality', it => it.yt_quality], ['Title', it => it.yt_title], ['Link updated', it => isoDay(it.yt_link_updated_at)], ['Previous link', it => it.yt_prev_url]]) }
+    { name: 'YouTube', rows: per('yt', [['Passed or in progress', ytResult], ['Uploaded', it => isoDay(it.yt_published)], ['Channel', it => it.yt_channel], ['Quality', it => it.yt_quality], ['Title', it => it.yt_title], ['Link updated', it => isoDay(it.yt_link_updated_at)], ['Previous link', it => it.yt_prev_url]]) },
+    { name: 'Unbranded videos', rows: per('ub', [['Quality', it => it.ub_quality], ['Link updated', it => isoDay(it.ub_link_updated_at)]]) }
   ];
 }
 function toWorkbook(sheets) {
@@ -1785,7 +1843,7 @@ document.addEventListener('click', async e => {
       if (pw != null) await saveUser({ username: u, password: pw }, 'Password reset for ' + esc(u));
       break;
     }
-    case 'openfilter': S.filter = el.dataset.f; S.search = ''; $('#q').value = ''; go('items'); break;
+    case 'openfilter': S.keep.clear(); S.rfState = ''; S.filter = el.dataset.f; S.search = ''; $('#q').value = ''; go('items'); break;
     case 'priceonly': S.priceOnly = el.checked; render(); break;
     case 'layout': S.layout = el.dataset.v; render(); break;
     case 'size': S.size = el.dataset.v; render(); break;
@@ -1886,7 +1944,7 @@ document.addEventListener('click', async e => {
       XLSX.writeFile(toWorkbook([{ name: 'Sign-in log', rows: rows }]), 'Sign-in log ' + isoDay(new Date()) + '.xlsx');
       break;
     }
-    case 'reviewnew': S.filter = 'new_links'; S.search = ''; S.priceOnly = false; go('review'); break;
+    case 'reviewnew': S.keep.clear(); S.rfState = ''; S.filter = 'new_links'; S.search = ''; S.priceOnly = false; go('review'); break;
     case 'previewfile': {
       const ic = +$('#lic').value, body = FILE_L.rows.slice(FILE_L.hi + 1), rows = [];
       const cols = $$('[data-lcol]').filter(s => s.value).map(s => [+s.dataset.lcol, s.value]);
@@ -1903,7 +1961,7 @@ document.addEventListener('click', async e => {
       try {
         const r = await call('importLinks', rows);
         S.preview = []; await reload();
-        S.filter = 'new_links'; S.search = ''; S.priceOnly = false; if ($('#q')) $('#q').value = ''; go('items');
+        S.keep.clear(); S.rfState = ''; S.filter = 'new_links'; S.search = ''; S.priceOnly = false; if ($('#q')) $('#q').value = ''; go('items');
         toast('Added ' + r.updated + ' link(s) to the review list' + (r.same ? ', ' + r.same + ' unchanged' : '') + (r.notFound.length ? ', ' + r.notFound.length + ' item(s) not found' : '') +
           (r.unmatched.length ? ', ' + r.unmatched.length + ' YouTube link(s) with no item # in the title' : ''), 8000);
       } catch (err) { toast(errMsg(err), 7000); el.disabled = false; }
@@ -1936,7 +1994,9 @@ document.addEventListener('click', async e => {
 });
 document.addEventListener('change', async e => {
   const el = e.target, act = el.dataset.act;
-  if (act === 'setfilter') { S.filter = el.value; S.shown = 300; render(); }
+  if (act === 'setfilter') { S.keep.clear(); S.filter = el.value; S.shown = 300; render(); }
+  else if (act === 'rfwhich') { S.keep.clear(); S.rfWhich = el.value; S.rfState = ''; S.shown = 300; render(); }
+  else if (act === 'rfstate') { S.keep.clear(); S.rfState = el.value; S.shown = 300; render(); }
   else if (act === 'setcat') { S.cat = el.value; S.shown = 300; render(); }
   else if (act === 'urole' || act === 'ustatus') {
     const u = el.dataset.u, me = u.toLowerCase() === String(S.user).toLowerCase(), v = el.value;
