@@ -632,6 +632,7 @@ const BE = {
     return normSettings(await rpc('mp_save_settings', { p_token: tok(), p_obj: o }));
   },
   listUsers: () => rpc('mp_list_users', { p_token: tok() }),
+  listLogins: (user) => rpc('mp_list_logins', { p_token: tok(), p_user: user || '', p_limit: 2000 }),
   saveUser: u => rpc('mp_save_user', { p_token: tok(), p_u: u }),
   changePassword: (cur, next) => rpc('mp_change_password', { p_token: tok(), p_current: cur, p_new: next })
 };
@@ -710,7 +711,7 @@ function parseWorkbook(wb, fileName) {
 let pending = 0, busyT;
 const BUSY_LABEL = { saveItem: 'Saving…', getData: 'Loading…', importLinks: 'Importing…', importItems: 'Importing…', linkVideos: 'Linking videos…',
   scanChannels: 'Scanning YouTube channels…', refreshYouTube: 'Refreshing YouTube details…', importWorkbook: 'Loading your spreadsheet…',
-  saveUser: 'Saving account…', listUsers: 'Loading accounts…', login: 'Signing in…', changePassword: 'Saving password…', saveSettings: 'Saving settings…', getItemLog: 'Loading history…' };
+  saveUser: 'Saving account…', listUsers: 'Loading accounts…', listLogins: 'Loading sign-in log…', login: 'Signing in…', changePassword: 'Saving password…', saveSettings: 'Saving settings…', getItemLog: 'Loading history…' };
 function busy(on, fn) {
   pending = Math.max(0, pending + (on ? 1 : -1));
   const b = document.getElementById('busy');
@@ -802,6 +803,7 @@ const isReady = it => ASSETS.every(a => eff(it, a.k) === 'Acceptable');
 
 const FILTERS = [
   ['all', 'All items', () => true],
+  ['new_links', 'New links waiting for review', it => ASSETS.some(a => it[a.k + '_url'] && it[a.k + '_link_updated_at'] && !it[a.k + '_status'])],
   ['attention', 'Needs attention (anything not acceptable)', it => !isReady(it)],
   ['ready', 'Fully ready (all four acceptable)', isReady],
   ['unreviewed', 'Unreviewed / new links', it => ASSETS.some(a => eff(it, a.k) === 'Unreviewed')],
@@ -976,7 +978,7 @@ function viewDash() {
     '<span><i class="dot d-exp"></i>Expired (YouTube only)</span></div>';
   h += '<div class="small muted">Click any segment to see those items.</div></div></div></div>';
 
-  const cards = ['attention', 'unreviewed', 'review_due', 'yt_expired', 'missing_both', 'photo_missing', 'video_missing', 'ub_missing', 'yt_missing', 'photo_bad', 'video_bad', 'ub_bad', 'yt_bad', 'unknown4k', 'link_updated'];
+  const cards = ['new_links', 'attention', 'unreviewed', 'review_due', 'yt_expired', 'missing_both', 'photo_missing', 'video_missing', 'ub_missing', 'yt_missing', 'photo_bad', 'video_bad', 'ub_bad', 'yt_bad', 'unknown4k', 'link_updated'];
   h += '<div class="card"><h2 class="sec">Work lists</h2><div class="lists">';
   cards.forEach(id => {
     const n = base.filter(FMAP[id][2]).length;
@@ -1226,40 +1228,77 @@ async function linkPairs(pairs) {
 
 /* =============================== import =============================== */
 function viewImport() {
-  let h = '<div class="stack"><div class="card"><h2 class="sec">Load your whole spreadsheet</h2><p class="muted small" style="margin-top:0">In your Google Sheet choose <b>File → Download → Microsoft Excel (.xlsx)</b>, then pick that file here. Items, links, statuses, notes, categories and your extra price-list columns are all loaded. Empty cells never erase what is already saved, so you can load an updated copy any time.</p>' +
+  const waiting = S.items.filter(FMAP.new_links[2]).length;
+  let h = '<div class="stack">' + (waiting ? '<div class="card row"><div class="grow"><b>' + nf(waiting) + ' item(s)</b> have new links waiting for review.</div><button class="pri" data-act="reviewnew">Review them now</button></div>' : '') + '<div class="card"><h2 class="sec">Load your whole spreadsheet</h2><p class="muted small" style="margin-top:0">In your Google Sheet choose <b>File → Download → Microsoft Excel (.xlsx)</b>, then pick that file here. Items, links, statuses, notes, categories and your extra price-list columns are all loaded. Empty cells never erase what is already saved, so you can load an updated copy any time.</p>' +
     '<div class="row"><input type="file" id="wbfile" accept=".xlsx,.xls,.csv"></div><div id="wbsum"></div></div>';
   h += '<div class="card"><h2 class="sec">1 · Master item list</h2><p class="muted small" style="margin-top:0">Upload the price sheet (Excel or CSV). It needs an item-number column; name and product-category columns are optional. New items are added and existing items get their name updated.</p>' +
     '<div class="row"><input type="file" id="mfile" accept=".xlsx,.xls,.csv"><label class="small row"><input type="checkbox" id="moff"> Mark items that are not in this file as "not on price sheet"</label></div><div id="mmap"></div></div>';
-  h += '<div class="card"><h2 class="sec">2 · Paste links</h2><p class="muted small" style="margin-top:0">One per line: <code>ITEM# link</code> with a tab, comma or space between. YouTube links can be pasted on their own; the item # is found from the video title. Unbranded video links look like any other video link, so choose "Unbranded videos" in the list below when pasting them.</p>' +
-    '<textarea id="paste" rows="6" placeholder="DM1234  https://youtu.be/abc123xyz89&#10;DM5678  https://drive.google.com/file/d/…/view&#10;https://www.youtube.com/watch?v=abc123xyz89"></textarea>' +
+  h += '<div class="card"><h2 class="sec">2 · Paste links</h2><p class="muted small" style="margin-top:0">Paste links on their own, one per line. The item # is read from the file name (<code>…/video/<b>DM-0902</b>.mp4</code> → DM-0902), and <b>.mp4</b> means video while <b>.jpg / .png</b> means photo. YouTube links get their item # from the video title. You can also type <code>ITEM# link</code> on a line to set it yourself. Unbranded video links look like any other video link, so choose "Unbranded videos" in the list below when pasting them.</p>' +
+    '<textarea id="paste" rows="6" placeholder="http://dominatorfireworks.com/video/DM-0902.mp4&#10;http://dominatorfireworks.com/photo/DM-0902.jpg&#10;https://www.youtube.com/watch?v=abc123xyz89&#10;DM5678  https://drive.google.com/file/d/…/view"></textarea>' +
     '<div class="row" style="margin-top:8px">Links are <select id="ptype"><option value="auto">Auto-detect</option><option value="photo">Photos</option><option value="video">Physical videos</option><option value="ub">Unbranded videos</option><option value="yt">YouTube</option></select>' +
     '<button data-act="parsepaste">Preview</button></div></div>';
-  h += '<div class="card"><h2 class="sec">3 · Upload a links spreadsheet</h2><p class="muted small" style="margin-top:0">Excel or CSV with an item-number column and one or more link columns (for example "Photo", "Video", "Unbranded", "YouTube"). You can change how each column is used before importing.</p>' +
+  h += '<div class="card"><h2 class="sec">3 · Upload a links spreadsheet</h2><p class="muted small" style="margin-top:0">Excel or CSV with one or more link columns and, if you have it, an item-number column (without one, the item # is read from each link) (for example "Photo", "Video", "Unbranded", "YouTube"). You can change how each column is used before importing.</p>' +
     '<input type="file" id="lfile" accept=".xlsx,.xls,.csv"><div id="lmap"></div></div>';
   h += '<div id="pv">' + previewHtml() + '</div></div>';
   return h;
 }
+let ALNUM_IDX = null, ALNUM_N = -1;
+/** Finds the tracker item for a piece of text like "DM-0902", "DM0902" or "DM0902_2" (ignores dashes, spaces and case). */
+function matchItemNo(c) {
+  c = String(c || '').trim(); if (!c) return '';
+  if (getItem(c)) return getItem(c).item_no;
+  if (!ALNUM_IDX || ALNUM_N !== S.items.length) { ALNUM_IDX = {}; ALNUM_N = S.items.length; S.items.forEach(it => { const k = alnum(it.item_no); if (k && !ALNUM_IDX[k]) ALNUM_IDX[k] = it.item_no; }); }
+  let t = c;
+  for (let i = 0; i < 4 && t; i++) {
+    const k = alnum(t);
+    if (k.length >= 3 && ALNUM_IDX[k]) return ALNUM_IDX[k];
+    const cut = t.search(/[\s_\-(][^\s_\-(]*$/);   // drop a trailing "-2", "_front", " (1)" and try again
+    if (cut <= 0) break;
+    t = t.slice(0, cut);
+  }
+  return '';
+}
+/** Item number from a file link: the file name between the last "/" and the ".", e.g. …/video/DM-0902.mp4 → DM-0902. */
+function itemFromUrl(url) {
+  let seg = '';
+  try { seg = decodeURIComponent(new URL(url).pathname.split('/').filter(Boolean).pop() || ''); } catch (e) { return ''; }
+  const first = seg.indexOf('.'), last = seg.lastIndexOf('.');
+  if (last <= 0) return '';
+  const cands = [seg.slice(0, last), seg.slice(0, first)].map(x => x.trim()).filter(Boolean);
+  for (const c of cands) { const m = matchItemNo(c); if (m) return m; }
+  return cands[0] || '';
+}
 function guessType(url, dtype) {
   if (dtype && dtype !== 'auto') return dtype;
   if (ytId(url) && /youtu/.test(url)) return 'yt';
+  if (/unbrand/i.test(url) && VID_RE.test(url)) return 'ub';
   if (IMG_RE.test(url)) return 'photo';
   if (VID_RE.test(url)) return 'video';
   return '';
 }
 function parsePaste(text, dtype) {
-  return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
+  const out = [];
+  text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).forEach(l => {
     const parts = l.split(/[\t,;]+|\s+/).map(p => p.trim()).filter(Boolean);
-    const url = parts.find(p => /^https?:\/\//i.test(p)) || '';
-    const item = parts.find(p => p !== url && !/^https?:\/\//i.test(p)) || '';
-    return { item_no: item, url: url, type: guessType(url, dtype) };
+    const urls = parts.filter(p => /^https?:\/\//i.test(p)), others = parts.filter(p => !/^https?:\/\//i.test(p));
+    if (!urls.length) { out.push({ item_no: others[0] || '', url: '', type: '' }); return; }
+    urls.forEach(url => out.push(linkRow(urls.length === 1 ? others[0] : '', url, guessType(url, dtype))));
   });
+  return out;
+}
+/** One link to import. With no item # typed, it is read from the link's file name. */
+function linkRow(typed, url, type) {
+  typed = String(typed || '').trim();
+  if (typed) return { item_no: matchItemNo(typed) || typed, url: url, type: type };
+  const f = type === 'yt' ? '' : itemFromUrl(url);
+  return { item_no: f, url: url, type: type, auto: !!f };
 }
 function rowState(r) {
   if (!r.url) return ['No link found', 'bad', false];
   if (!r.type) return ['Can\'t tell which asset this is. Pick a type above.', 'bad', false];
-  if (!r.item_no) return r.type === 'yt' ? ['Item # will be matched from the title', 'new', true] : ['No item #', 'bad', false];
+  if (!r.item_no) return r.type === 'yt' ? ['Item # will be matched from the title', 'new', true] : ['No item # found. Type it in.', 'bad', false];
   const it = getItem(r.item_no);
-  if (!it) return ['Item not in tracker', 'bad', false];
+  if (!it) return [(r.auto ? 'Read “' + r.item_no + '” from the link, but it' : 'That item') + ' is not in the tracker. Fix the item #.', 'bad', false];
   const cur = it[r.type + '_url'];
   const same = r.type === 'yt' ? (ytId(cur) && ytId(cur) === ytId(r.url)) : cur === r.url;
   if (same) return ['Same as current', 'miss', false];
@@ -1268,12 +1307,17 @@ function rowState(r) {
 function previewHtml() {
   const rows = S.preview;
   if (!rows.length) return '';
-  const st = rows.map(rowState), ok = st.filter(s => s[2]).length;
+  const st = rows.map(rowState), ok = st.filter(s => s[2]).length, auto = rows.filter(r => r.auto && getItem(r.item_no)).length;
   const tl = { photo: 'Photo', video: 'Physical video', ub: 'Unbranded video', yt: 'YouTube' };
-  return '<div class="card"><div class="row"><h2 class="sec grow" style="margin:0">Preview: ' + rows.length + ' link(s), ' + ok + ' will be applied</h2>' +
+  return '<div class="card" id="pvcard"><div class="row"><div class="grow"><h2 class="sec" style="margin:0">Preview: ' + rows.length + ' link(s), ' + ok + ' will be applied</h2>' +
+    '<div class="small muted">' + (auto ? nf(auto) + ' item number(s) were read from the link\'s file name. ' : '') + 'You can fix any item # or type below. Applied links go to the <b>New links waiting for review</b> list.</div></div>' +
     '<button data-act="clearpv">Clear</button><button class="pri" data-act="applypv"' + (ok ? '' : ' disabled') + '>Apply ' + ok + '</button></div>' +
-    '<div class="tablewrap" style="margin-top:10px;max-height:420px;overflow:auto;box-shadow:none"><table><thead><tr><th>Item #</th><th>Type</th><th>Link</th><th>Result</th></tr></thead><tbody>' +
-    rows.slice(0, 1000).map((r, i) => '<tr><td class="mono">' + esc(r.item_no) + '</td><td>' + esc(tl[r.type] || '?') + '</td><td style="max-width:420px;overflow:hidden;text-overflow:ellipsis">' + esc(r.url) + '</td><td><span class="chip s-' + st[i][1] + '">' + esc(st[i][0]) + '</span></td></tr>').join('') +
+    '<datalist id="pvitems">' + S.items.map(it => '<option value="' + esc(it.item_no) + '">').join('') + '</datalist>' +
+    '<div class="tablewrap" style="margin-top:10px;max-height:460px;overflow:auto;box-shadow:none"><table><thead><tr><th>Item #</th><th>Type</th><th>Link</th><th>Result</th></tr></thead><tbody>' +
+    rows.slice(0, 1000).map((r, i) => '<tr><td><input type="text" class="mono" list="pvitems" style="width:130px;padding:3px 6px" data-act="pvitem" data-i="' + i + '" value="' + esc(r.item_no) + '" aria-label="Item number">' +
+      (r.auto && getItem(r.item_no) ? '<div class="small muted">from link</div>' : '') + '</td>' +
+      '<td><select data-act="pvtype" data-i="' + i + '" aria-label="Type">' + (r.type ? '' : '<option value="">?</option>') + Object.keys(tl).map(t => '<option value="' + t + '"' + (r.type === t ? ' selected' : '') + '>' + tl[t] + '</option>').join('') + '</select></td>' +
+      '<td style="max-width:420px;overflow:hidden;text-overflow:ellipsis"><a target="_blank" rel="noopener" href="' + esc(r.url) + '">' + esc(r.url) + '</a></td><td><span class="chip s-' + st[i][1] + '">' + esc(st[i][0]) + '</span></td></tr>').join('') +
     '</tbody></table></div>' + (rows.length > 1000 ? '<p class="small muted">Showing the first 1,000 rows.</p>' : '') + '</div>';
 }
 function readFileRows(file) {
@@ -1323,10 +1367,9 @@ function mapMaster(rows) {
 }
 function mapLinks(rows) {
   const hi = headerRowIndex(rows), hdr = rows[hi] || [], body = rows.slice(hi + 1);
-  let ic = hdr.findIndex(c => ITEM_COL.test(String(c)));
-  if (ic < 0) ic = 0;
+  const ic = hdr.findIndex(c => ITEM_COL.test(String(c)));
   FILE_L = { rows, hi };
-  let h = '<div style="margin-top:10px"><div class="row">Item # column <select id="lic">' + colOptions(hdr, ic) + '</select></div><div class="row" style="margin-top:8px">';
+  let h = '<div style="margin-top:10px"><div class="row">Item # column <select id="lic"><option value="-1"' + (ic < 0 ? ' selected' : '') + '>(none: read it from each link)</option>' + colOptions(hdr, ic) + '</select></div><div class="row" style="margin-top:8px">';
   hdr.forEach((c, i) => {
     if (i === ic) return;
     const g = colGuess(c, body.slice(0, 50).map(r => String(r[i] || '')));
@@ -1369,8 +1412,35 @@ function viewSettings() {
 /* =============================== users (administrators) =============================== */
 const roleLabel = r => r === 'Admin' ? 'Administrator' : r;
 async function loadUsers() {
-  try { S.usersList = await call('listUsers'); if (S.view === 'users') main.innerHTML = viewUsers(); }
-  catch (e) { toast(errMsg(e), 6000); }
+  try {
+    const r = await Promise.all([call('listUsers'), call('listLogins', S.logUser).catch(() => null)]);
+    S.usersList = r[0]; S.logins = r[1];
+    if (S.view === 'users') main.innerHTML = viewUsers();
+  } catch (e) { toast(errMsg(e), 6000); }
+}
+/** "Chrome on Windows" from the browser's user-agent text. */
+function deviceLabel(ua) {
+  ua = String(ua || ''); if (!ua) return '';
+  const b = /Edg\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\/|CriOS/.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+  const o = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X|Macintosh/.test(ua) ? 'Mac' : /CrOS/.test(ua) ? 'Chromebook' : /Linux/.test(ua) ? 'Linux' : '';
+  return b + (o ? ' on ' + o : '');
+}
+function ago(at) {
+  const t = new Date(at); if (!at || isNaN(t)) return '';
+  const m = Math.round((Date.now() - t) / 6e4);
+  return m < 2 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : t.toLocaleDateString();
+}
+function loginLogHtml() {
+  const evCls = e => /^Signed in/.test(e) ? 'ok' : /^Signed out/.test(e) ? 'miss' : 'bad';
+  let h = '<div class="card" id="logincard"><div class="row"><h2 class="sec grow" style="margin:0">Sign-in log</h2>' +
+    '<select data-act="loguser" aria-label="Show sign-ins for"><option value="">Everyone</option>' + (S.usersList || []).map(u => '<option' + (S.logUser === u.username ? ' selected' : '') + '>' + esc(u.username) + '</option>').join('') + '</select>' +
+    '<button class="sm" data-act="logrefresh">Refresh</button><button class="sm" data-act="logexport"' + (S.logins && S.logins.length ? '' : ' disabled') + '>Download Excel</button></div>' +
+    '<p class="muted small" style="margin:6px 0 10px">Every sign-in, sign-out and failed attempt, newest first. Kept for 2 years.</p>';
+  if (!S.logins) return h + '<p class="muted small">Sign-in log not available. Run the latest supabase-setup.sql in Supabase to turn it on.</p></div>';
+  if (!S.logins.length) return h + '<p class="muted">No sign-ins recorded yet.</p></div>';
+  return h + '<div class="tablewrap" style="box-shadow:none;max-height:440px;overflow:auto"><table><thead><tr><th>When</th><th>Who</th><th>What</th><th>Device</th></tr></thead><tbody>' +
+    S.logins.map(l => '<tr><td>' + esc(new Date(l.at).toLocaleString()) + '</td><td><b>' + esc(l.username) + '</b></td><td><span class="chip s-' + evCls(l.event) + '">' + esc(l.event) + '</span></td><td class="small muted">' + esc(deviceLabel(l.device)) + '</td></tr>').join('') +
+    '</tbody></table></div></div>';
 }
 function viewUsers() {
   const roleOpts = sel => ['Viewer', 'Editor', 'Admin'].map(r => '<option value="' + r + '"' + (r === sel ? ' selected' : '') + '>' + roleLabel(r) + '</option>').join('');
@@ -1385,7 +1455,7 @@ function viewUsers() {
     '<dt>Administrator</dt><dd>Everything an editor can do, plus changing Settings and managing accounts on this page.</dd></dl></div>';
   h += '<div class="card"><h2 class="sec">Accounts</h2>';
   if (!S.usersList) return h + '<p class="muted">Loading accounts…</p></div></div>';
-  h += '<div class="tablewrap" style="box-shadow:none"><table class="users"><thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Last sign-in</th><th>Added</th><th></th></tr></thead><tbody>' +
+  h += '<div class="tablewrap" style="box-shadow:none"><table class="users"><thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Last sign-in</th><th>Last active</th><th>Added</th><th></th></tr></thead><tbody>' +
     S.usersList.map(u => {
       const me = u.username.toLowerCase() === String(S.user).toLowerCase();
       return '<tr><td><b>' + esc(u.username) + '</b>' + (me ? ' <span class="muted small">(you)</span>' : '') + '</td>' +
@@ -1394,10 +1464,11 @@ function viewUsers() {
           ['Active', 'Disabled'].map(st => '<option' + (st === u.status ? ' selected' : '') + '>' + st + '</option>').join('') + '</select>' +
           (u.status === 'Disabled' ? ' <span class="chip s-bad">Can\'t sign in</span>' : '') + '</td>' +
         '<td>' + (u.last_login ? esc(new Date(u.last_login).toLocaleString()) : '<span class="muted">Never</span>') + '</td>' +
+        '<td>' + (u.last_seen ? esc(ago(u.last_seen)) : '<span class="muted">–</span>') + '</td>' +
         '<td class="small muted">' + day(u.created_at) + (u.created_by ? ' by ' + esc(u.created_by) : '') + '</td>' +
         '<td><button class="sm" data-act="upw" data-u="' + esc(u.username) + '">Reset password</button></td></tr>';
     }).join('') + '</tbody></table></div>' +
-    '<p class="muted small" style="margin-bottom:0">Changes apply right away. A disabled account is signed out and cannot sign in until it is set back to Active. There must always be at least one active administrator.</p></div></div>';
+    '<p class="muted small" style="margin-bottom:0">Changes apply right away. A disabled account is signed out and cannot sign in until it is set back to Active. There must always be at least one active administrator. "Last active" is the last time that person used the portfolio.</p></div>' + loginLogHtml() + '</div>';
   return h;
 }
 async function saveUser(u, okMsg) {
@@ -1663,12 +1734,19 @@ document.addEventListener('click', async e => {
     }
     case 'parsepaste': S.preview = parsePaste($('#paste').value, $('#ptype').value); $('#pv').innerHTML = previewHtml(); break;
     case 'clearpv': S.preview = []; $('#pv').innerHTML = ''; break;
+    case 'logrefresh': loadUsers(); break;
+    case 'logexport': {
+      const rows = [['When', 'Who', 'What', 'Device', 'Browser details']].concat((S.logins || []).map(l => [new Date(l.at).toLocaleString(), l.username, l.event, deviceLabel(l.device), l.device || '']));
+      XLSX.writeFile(toWorkbook([{ name: 'Sign-in log', rows: rows }]), 'Sign-in log ' + isoDay(new Date()) + '.xlsx');
+      break;
+    }
+    case 'reviewnew': S.filter = 'new_links'; S.search = ''; S.priceOnly = false; go('review'); break;
     case 'previewfile': {
       const ic = +$('#lic').value, body = FILE_L.rows.slice(FILE_L.hi + 1), rows = [];
       const cols = $$('[data-lcol]').filter(s => s.value).map(s => [+s.dataset.lcol, s.value]);
       body.forEach(r => cols.forEach(([c, t]) => {
         const url = String(r[c] || '').trim();
-        if (/^https?:\/\//i.test(url)) rows.push({ item_no: String(r[ic] || '').trim(), url, type: t });
+        if (/^https?:\/\//i.test(url)) rows.push(linkRow(ic >= 0 ? r[ic] : '', url, t));
       }));
       S.preview = rows; $('#pv').innerHTML = previewHtml(); $('#pv').scrollIntoView({ behavior: 'smooth' });
       break;
@@ -1679,7 +1757,8 @@ document.addEventListener('click', async e => {
       try {
         const r = await call('importLinks', rows);
         S.preview = []; await reload();
-        toast('Updated ' + r.updated + ' link(s)' + (r.same ? ', ' + r.same + ' unchanged' : '') + (r.notFound.length ? ', ' + r.notFound.length + ' item(s) not found' : '') +
+        S.filter = 'new_links'; S.search = ''; S.priceOnly = false; if ($('#q')) $('#q').value = ''; go('items');
+        toast('Added ' + r.updated + ' link(s) to the review list' + (r.same ? ', ' + r.same + ' unchanged' : '') + (r.notFound.length ? ', ' + r.notFound.length + ' item(s) not found' : '') +
           (r.unmatched.length ? ', ' + r.unmatched.length + ' YouTube link(s) with no item # in the title' : ''), 8000);
       } catch (err) { toast(errMsg(err), 7000); el.disabled = false; }
       break;
@@ -1725,8 +1804,16 @@ document.addEventListener('change', async e => {
     if (me) { try { setData(await call('getData')); } catch (err) { if (err.auth) { signOut(err.message); return; } } routeFromHash(); }
   }
   else if (act === 'export') { const v = el.value; el.value = ''; if (v) doExport(v); }
+  else if (act === 'loguser') { S.logUser = el.value; try { S.logins = await call('listLogins', S.logUser); } catch (err) { toast(errMsg(err)); } const c = $('#logincard'); if (c) c.outerHTML = loginLogHtml(); }
   else if (act === 'set' || act === 'note') save(el.dataset.no, { [el.dataset.f]: el.value }, true);
   else if (act === 'vitem') { S.vsel[el.dataset.id] = el.value.trim(); render(); }
+  else if (act === 'pvitem' || act === 'pvtype') {
+    const r = S.preview[+el.dataset.i]; if (!r) return;
+    if (act === 'pvitem') { const v = el.value.trim(); r.item_no = matchItemNo(v) || v; r.auto = false; } else r.type = el.value;
+    const tw = $('#pvcard .tablewrap'), top = tw ? tw.scrollTop : 0;
+    $('#pv').innerHTML = previewHtml();
+    const tw2 = $('#pvcard .tablewrap'); if (tw2) tw2.scrollTop = top;
+  }
   else if (el.id === 'wbfile' && el.files[0]) {
     const file = el.files[0];
     try {
