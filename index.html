@@ -199,6 +199,17 @@ td .mini{width:64px;height:40px;object-fit:cover;border-radius:4px;display:block
 .naline{font-size:13px;color:var(--muted);padding:10px 12px;border:1px dashed var(--line);border-radius:8px}
 .naopts{margin-top:6px}
 .wgroups{display:grid;gap:12px}
+.statpair{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start}
+.statpair>div{min-width:0}
+.ready-num.rv{color:var(--new)}
+.plbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-radius:10px;background:var(--new-bg);margin-bottom:10px;font-size:14px}
+.picdrop{border:2px dashed var(--line);border-radius:10px;padding:16px;text-align:center;color:var(--muted);font-size:14px}
+.picdrop.on{border-color:var(--new);color:var(--new)}
+.picprog{height:6px;border-radius:999px;background:var(--sunk);overflow:hidden;margin:10px 0}
+.picprog i{display:block;height:100%;background:var(--new);width:0;transition:width .2s}
+.pictab td,.pictab th{font-size:13px}
+.unk{display:inline-flex;gap:4px;margin:2px}
+#plitems{width:100%;font-family:var(--f-mono);font-size:13px}
 .rfgroup{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
 .rfgroup select{max-width:260px}
 tr.kept td{opacity:.75}
@@ -281,7 +292,7 @@ body.waiting{cursor:progress}
     <button data-go="review">Review</button>
     <button data-go="videos">YouTube review<span id="vbadge"></span></button>
     <button data-go="import" id="nav-import">Import links</button>
-    <button data-go="users" id="nav-users" hidden>Users</button>
+    <button data-go="testing" id="nav-testing">Testing list</button>
     <button data-go="settings">Settings</button>
   </nav>
 </header>
@@ -294,7 +305,7 @@ body.waiting{cursor:progress}
 /* =============================== state =============================== */
 const S = {
   items: [], byNo: {}, videos: [], settings: {}, user: '', lastJob: '',
-  view: 'dash', filter: 'all', search: '', priceOnly: true, cat: '', categories: [], layout: 'table', size: 'm', seg: '', rfWhich: 'item', rfState: '', keep: new Set(), keptN: 0,
+  view: 'dash', filter: 'all', search: '', priceOnly: true, cat: '', categories: [], layout: 'table', size: 'm', seg: '', lists: [], plist: '', pic: null, rfWhich: 'item', rfState: '', keep: new Set(), keptN: 0,
   queue: [], qi: 0, queueLabel: '', shown: 300, preview: [], vsel: {}
 };
 const DEMO = typeof window.DEMO_API === 'function';
@@ -520,6 +531,8 @@ const BE = {
     return d;
   },
   getItemLog: no => rpc('mp_get_item_log', { p_token: tok(), p_item_no: no }),
+  saveList: list => rpc('mp_save_list', { p_token: tok(), p_list: list }),
+  deleteList: id => rpc('mp_delete_list', { p_token: tok(), p_id: id }),
   async saveItem(no, patch, base) {
     base = base || getItem(no);
     const b = buildPatch(base, patch);
@@ -726,7 +739,7 @@ function parseWorkbook(wb, fileName) {
 let pending = 0, busyT;
 const BUSY_LABEL = { saveItem: 'Saving…', getData: 'Loading…', importLinks: 'Importing…', importItems: 'Importing…', approveVideo: 'Saving…', decideVideo: 'Saving…',
   scanChannels: 'Scanning YouTube channels…', importWorkbook: 'Loading your spreadsheet…',
-  saveUser: 'Saving account…', listUsers: 'Loading accounts…', listLogins: 'Loading sign-in log…', login: 'Signing in…', changePassword: 'Saving password…', saveSettings: 'Saving settings…', getItemLog: 'Loading history…' };
+  saveUser: 'Saving account…', saveList: 'Saving list…', deleteList: 'Deleting list…', listUsers: 'Loading accounts…', listLogins: 'Loading sign-in log…', login: 'Signing in…', changePassword: 'Saving password…', saveSettings: 'Saving settings…', getItemLog: 'Loading history…' };
 function busy(on, fn) {
   pending = Math.max(0, pending + (on ? 1 : -1));
   const b = document.getElementById('busy');
@@ -885,6 +898,123 @@ function rfSelects() {
   return '<span class="rfgroup"><label class="small muted" for="rfw">Review status</label><select id="rfw" data-act="rfwhich" aria-label="Which part">' + RF_WHICH.map(x => '<option value="' + x[0] + '"' + (x[0] === w ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select>' +
     '<select id="rfs" data-act="rfstate" aria-label="Status">' + opts.map(x => '<option value="' + x[0] + '"' + (x[0] === (S.rfState || '') ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select></span>';
 }
+/* Plain-English "what needs to be done" for one item (used by priority lists). */
+const andList = a => a.length < 2 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+const LBL3 = { photo: 'Photo', video: 'Physical video', yt: 'YouTube' };
+function todoSummary(it) {
+  if (!it) return 'Not in the tracker yet';
+  if (isReady(it)) return 'All good: photo, physical video and YouTube are acceptable';
+  const st = PASS_ASSETS.map(a => [a, eff(it, a)]);
+  const bad = st.filter(x => BAD.has(x[1])).map(x => x[0]);
+  const old = st.filter(x => x[1] === 'Expired').map(x => x[0]);
+  const miss = st.filter(x => x[1] === 'Missing').map(x => x[0]);
+  const unrev = st.filter(x => x[1] === 'Unreviewed' || x[1] === 'Review due').map(x => x[0]);
+  const parts = [];
+  if (unrev.length && !bad.length && !old.length && unrev.length === st.filter(x => x[1] !== 'Not needed' && x[1] !== 'Missing').length && !st.some(x => x[1] === 'Acceptable'))
+    parts.push("Hasn't been reviewed yet");
+  else if (unrev.length) parts.push(andList(unrev.map(a => LBL3[a])) + (unrev.length > 1 ? " haven't" : " hasn't") + ' been reviewed yet');
+  if (bad.length) parts.push(andList(bad.map(a => LBL3[a])) + (bad.length > 1 ? ' need' : ' needs') + ' updating');
+  if (old.length) parts.push('YouTube video is too old: needs a newer upload');
+  if (miss.length) parts.push('No ' + andList(miss.map(a => a === 'photo' ? 'photo' : a === 'video' ? 'physical video' : 'YouTube video')) + ' yet');
+  return parts.join('; ');
+}
+const videoWork = it => !it || ['video', 'yt'].some(a => { const e = eff(it, a); return e === 'Missing' || e === 'Expired' || BAD.has(e); });
+function summarySheet(nos, title) {
+  const rows = nos.map((no, i) => ({ i: i + 1, no: no, it: getItem(no) }));
+  rows.sort((a, b) => (videoWork(b.it) - videoWork(a.it)) || (a.i - b.i));
+  const out = [['Order on sheet', 'Item #', 'Item name', 'Type', 'What needs to be done', 'Video work needed?', 'Photo', 'Physical video', 'YouTube', 'Reviewed?', 'Physical video link', 'YouTube link']];
+  rows.forEach(r => {
+    const it = r.it;
+    out.push([r.i, it ? it.item_no : r.no, it ? it.name : '', it ? SEG_LABEL[segOf(it)] : '', todoSummary(it), videoWork(it) ? 'Yes' : 'No',
+      it ? eff(it, 'photo') : '', it ? eff(it, 'video') : '', it ? eff(it, 'yt') : '', it ? reviewProgress(it) : '', it ? it.video_url : '', it ? it.yt_url : ''].map(v => v == null ? '' : v));
+  });
+  return [{ name: String(title || 'Priority list').replace(/[\\\/?*\[\]:]/g, ' ').slice(0, 31), rows: out }];
+}
+function downloadSummary(nos, title) {
+  const fname = String(title || 'Priority list').replace(/[^\w ()-]+/g, ' ').trim() + ' summary ' + isoDay(new Date()) + '.xlsx';
+  try { XLSX.writeFile(toWorkbook(summarySheet(nos, title)), fname); toast('Downloading ' + esc(fname)); } catch (e) { toast('Download failed: ' + errMsg(e), 7000); }
+}
+
+/* ---------------- reading item numbers from a picture ---------------- */
+const foldNo = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1').replace(/S/g, '5').replace(/B/g, '8').replace(/Z/g, '2').replace(/G/g, '6');
+let FOLD_IDX = null, FOLD_N = -1;
+function matchOcr(tok) {
+  const m = matchItemNo(tok); if (m) return m;
+  if (!FOLD_IDX || FOLD_N !== S.items.length) { FOLD_IDX = {}; FOLD_N = S.items.length; S.items.forEach(it => { const k = foldNo(it.item_no); if (k.length >= 3 && !FOLD_IDX[k]) FOLD_IDX[k] = it.item_no; }); }
+  const k = foldNo(tok); return k.length >= 3 ? (FOLD_IDX[k] || '') : '';
+}
+function loadScript(src) {
+  return new Promise((res, rej) => { const el = document.createElement('script'); el.src = src; el.onload = res; el.onerror = () => rej(new Error('Could not load the picture reader. Check the internet connection and try again.')); document.head.appendChild(el); });
+}
+let OCR_W = null;
+async function ocrWorker(onProg) {
+  if (!window.Tesseract) await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
+  if (!OCR_W) {
+    OCR_W = await window.Tesseract.createWorker('eng', 1, { logger: m => { if (onProg && m && m.status && /loading|initializ/.test(m.status)) onProg(m.status, m.progress); } });
+    await OCR_W.setParameters({ tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-', tessedit_pageseg_mode: '11' });
+  }
+  return OCR_W;
+}
+function fileToImage(file) {
+  return new Promise((res, rej) => { const u = URL.createObjectURL(file), im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('That file is not a picture this browser can open.')); im.src = u; });
+}
+/* Crop a vertical strip, enlarge it and boost the contrast (optionally to pure black/white) so the item numbers read cleanly. */
+function stripCanvas(img, x0, x1, scale, th) {
+  const W = img.naturalWidth, H = img.naturalHeight, sx = Math.max(0, Math.round(x0)), sw = Math.max(8, Math.min(W, Math.round(x1)) - sx);
+  scale = Math.min(scale, 6000 / Math.max(sw, H) * 1.0) || scale;
+  const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(sw * scale)); c.height = Math.max(1, Math.round(H * scale));
+  const g = c.getContext('2d'); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, sx, 0, sw, H, 0, 0, c.width, c.height);
+  const d = g.getImageData(0, 0, c.width, c.height), px = d.data, hist = new Array(256).fill(0), n = px.length / 4;
+  for (let i = 0; i < px.length; i += 4) { const v = Math.round(px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114); px[i] = v; hist[v]++; }
+  let lo = 0, hi = 255, acc = 0; while (lo < 255 && (acc += hist[lo]) < n * 0.01) lo++; acc = 0; while (hi > 0 && (acc += hist[hi]) < n * 0.01) hi--;
+  const span = Math.max(1, hi - lo);
+  for (let i = 0; i < px.length; i += 4) { let v = Math.max(0, Math.min(255, (px[i] - lo) * 255 / span)); if (th) v = v > th ? 255 : 0; px[i] = px[i + 1] = px[i + 2] = v; }
+  g.putImageData(d, 0, 0);
+  return { canvas: c, scale: c.width / sw, x0: sx };
+}
+const ITEMLIKE = /^[A-Z]{1,5}-?[A-Z]?\d{2,}[A-Z0-9-]{0,10}$/;
+async function readItemsFromPicture(file, onStep) {
+  const img = await fileToImage(file), W = img.naturalWidth;
+  const w = await ocrWorker((st, p) => onStep('Getting the picture reader ready (first time only)…', (p || 0) * 0.15));
+  const found = {}, unknown = {};
+  const take = (words, strip, pass) => {
+    words.forEach(wd => {
+      const raw = String(wd.text || '').toUpperCase(); if (!raw) return;
+      const y = wd.bbox ? wd.bbox.y0 / strip.scale : 0, x0 = wd.bbox ? wd.bbox.x0 / strip.scale + strip.x0 : 0, x1 = wd.bbox ? wd.bbox.x1 / strip.scale + strip.x0 : 0;
+      const toks = [raw].concat(raw.split(/-{2,}|\s+/)).filter(Boolean);
+      let hit = '';
+      for (const t of toks) { hit = matchOcr(t); if (hit) break; }
+      if (hit) { const f = found[hit] || (found[hit] = { no: hit, y: y, x0: x0, x1: x1, n: 0 }); f.n++; f.y = Math.min(f.y, y); }
+      else if (ITEMLIKE.test(raw) && raw.length >= 4 && raw.length <= 16) { const u = unknown[raw] || (unknown[raw] = { t: raw, y: y, passes: new Set() }); u.passes.add(pass); }
+    });
+  };
+  const run = async (x0, x1, scale, th, label, frac) => {
+    onStep(label, frac);
+    const strip = stripCanvas(img, x0, x1, scale, th);
+    const r = await w.recognize(strip.canvas);
+    take((r.data && r.data.words) || [], strip, label + scale + th);
+  };
+  // 1) a quick look at the left side to find which column holds the item numbers
+  await run(0, W * 0.45, 2, 0, 'Looking for the item-number column…', 0.2);
+  let col = [0, W * 0.15];
+  const hits = Object.values(found);
+  if (hits.length) {
+    const xs0 = hits.map(h => h.x0).sort((a, b) => a - b), xs1 = hits.map(h => h.x1).sort((a, b) => a - b);
+    const a = xs0[Math.floor(xs0.length * 0.1)], b = xs1[Math.ceil(xs1.length * 0.9) - 1];
+    if (b - a > W * 0.03) col = [Math.max(0, a - W * 0.03), Math.min(W, b + W * 0.03)];
+  }
+  // 2) read that column closely three different ways and combine what was found
+  await run(col[0], col[1], 2, 0, 'Reading item numbers (1 of 3)…', 0.4);
+  await run(col[0], col[1], 3, 0, 'Reading item numbers (2 of 3)…', 0.6);
+  await run(col[0], col[1], 4, 150, 'Reading item numbers (3 of 3)…', 0.8);
+  onStep('Done', 1);
+  URL.revokeObjectURL(img.src);
+  const items = Object.values(found).sort((a, b) => a.y - b.y).map(f => f.no);
+  const unk = Object.values(unknown).filter(u => u.passes.size >= 2 && !matchOcr(u.t)).sort((a, b) => a.y - b.y).map(u => u.t);
+  return { items: items, unknown: [...new Set(unk)] };
+}
+
 /* Sort: still needs reviewing first, then reviewed-but-not-passed, then passed. */
 function workRank(it) {
   if (isReady(it)) return 2;
@@ -943,7 +1073,23 @@ function getFilter(id) {
   if (m) { const a = ASSETS.find(x => x.k === m[1]); return [id, a.label + ': ' + m[2], it => eff(it, m[1]) === m[2]]; }
   return FILTERS[0];
 }
-function scoped() { return S.items.filter(it => (!S.priceOnly || onSheet(it)) && (!S.cat || it.category === S.cat) && (!S.seg || segOf(it) === S.seg)); }
+function scoped() {
+  if (S.plist) { const l = S.lists.find(x => String(x.id) === String(S.plist)); if (l) return l.items.map(n => getItem(n)).filter(Boolean).filter((it, i, a) => a.indexOf(it) === i); }
+  return S.items.filter(it => (!S.priceOnly || onSheet(it)) && (!S.cat || it.category === S.cat) && (!S.seg || segOf(it) === S.seg));
+}
+function plistSelect() {
+  if (!S.lists.length) return '';
+  return '<span class="rfgroup"><label class="small muted" for="plsel">Priority list</label><select id="plsel" data-act="plist" aria-label="Priority list"><option value="">None (all items)</option>' +
+    S.lists.map(l => '<option value="' + l.id + '"' + (String(l.id) === String(S.plist) ? ' selected' : '') + '>' + esc(l.name) + ' · ' + l.items.length + ' items · ' + day(l.created_at) + '</option>').join('') + '</select></span>';
+}
+function plistBar() {
+  const l = S.plist && S.lists.find(x => String(x.id) === String(S.plist)); if (!l) return '';
+  const missing = l.items.filter(n => !getItem(n));
+  const its = l.items.map(getItem).filter(Boolean), done = its.filter(it => reviewProgress(it) === 'All reviewed').length;
+  return '<div class="plbar"><span class="grow">📋 <b>' + esc(l.name) + '</b> · ' + nf(l.items.length) + ' items · ' + nf(done) + ' fully reviewed' + (l.created_by ? ' · saved by ' + esc(l.created_by) + ' ' + day(l.created_at) : '') +
+    (missing.length ? ' · <span class="err">not in the tracker: ' + esc(missing.join(', ')) + '</span>' : '') + '</span>' +
+    '<button class="sm pri" data-act="plxlsx">Download summary (Excel)</button>' + (canEdit() ? '<button class="sm" data-act="pldelete">Delete list</button>' : '') + '</div>';
+}
 function allCategories() {
   const set = new Set(S.categories);
   S.items.forEach(it => { if (it.category) set.add(it.category); });
@@ -987,8 +1133,9 @@ function setData(d) {
   S.user = (d.me && d.me.username) || AUTH.name || d.user;
   S.role = (d.me && d.me.role) || 'Viewer';
   $('#nav-import').hidden = !canEdit();
-  $('#nav-users').hidden = !isAdmin();
   S.categories = d.categories || [];
+  S.lists = d.lists || [];
+  if (S.plist && !S.lists.some(l => String(l.id) === String(S.plist))) S.plist = '';
   CUT = new Date(new Date().getFullYear() - Number(S.settings.youtube_years || 3), 0, 1);
   if (S.settings.app_title) document.title = S.settings.app_title;
   setBadge();
@@ -1041,13 +1188,15 @@ function routeFromHash() {
     const i = S.queue.findIndex(x => norm(x) === norm(r.no));
     if (i < 0) { S.queue = [r.no]; S.qi = 0; } else S.qi = i;
     S.view = 'item';
-  } else S.view = ['dash', 'items', 'videos', 'import', 'settings', 'users'].includes(r.v) ? r.v : 'dash';
-  if ((S.view === 'import' && !canEdit()) || (S.view === 'users' && !isAdmin())) S.view = 'dash';
+  } else S.view = r.v === 'users' ? 'settings' : ['dash', 'items', 'videos', 'import', 'testing', 'settings'].includes(r.v) ? r.v : 'dash';
+  if (S.view === 'import' && !canEdit()) S.view = 'dash';
   paint();
 }
 window.addEventListener('popstate', routeFromHash);
 function paint() {
   $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.go === (S.view === 'item' ? 'review' : S.view)));
+  const on = $('#nav button.on'), nav = $('#nav');
+  if (on && nav && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = Math.max(0, on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2);   // keep the current tab visible on phones
   render();
   window.scrollTo(0, 0);
 }
@@ -1057,8 +1206,8 @@ function render() {
   else if (S.view === 'item') { main.innerHTML = viewItem(); }
   else if (S.view === 'videos') main.innerHTML = viewVideos();
   else if (S.view === 'import') main.innerHTML = viewImport();
-  else if (S.view === 'settings') main.innerHTML = viewSettings();
-  else if (S.view === 'users') { main.innerHTML = viewUsers(); if (!S.usersList) loadUsers(); }
+  else if (S.view === 'testing') main.innerHTML = viewTesting();
+  else if (S.view === 'settings') { main.innerHTML = viewSettings() + (isAdmin() ? '<div id="usersbox" style="margin-top:16px">' + viewUsers() + '</div>' : ''); if (isAdmin() && !S.usersList) loadUsers(); }
 }
 
 /* =============================== dashboard =============================== */
@@ -1070,12 +1219,17 @@ function viewDash() {
   }
   const ready = base.filter(isReady).length, pct = Math.round(ready / N * 100);
   let h = '<div class="stack">' + nudge;
-  if (S.videos.length) {
+  if (false) {
     h += '<button class="alert" data-go="videos"><b>' + S.videos.length + '</b><span><strong>New YouTube uploads waiting for review.</strong><br><span class="muted small">Found on your channels by the daily scan. Approve each one before it goes on an item.</span></span></button>';
   }
   h += '<div class="dash-top">';
-  h += '<div class="card"><h2 class="sec">Marketing-ready</h2>' +
-    '<div class="ready-num">' + nf(ready) + ' <small>of ' + nf(N) + '</small></div>' +
+  const fully = base.filter(it => reviewProgress(it) === 'All reviewed').length;
+  let first = '';
+  S.items.forEach(it => ASSETS.forEach(a => { const r = it[a.k + '_reviewed_at']; if (r && (!first || r < first)) first = r; }));
+  h += '<div class="card"><div class="statpair"><div><h2 class="sec">Marketing-ready</h2>' +
+    '<div class="ready-num">' + nf(ready) + ' <small>of ' + nf(N) + '</small></div></div>' +
+    '<div><h2 class="sec">Fully reviewed</h2><div class="ready-num rv">' + nf(fully) + ' <small>of ' + nf(N) + '</small></div>' +
+    '<div class="small muted">' + (first ? 'Reviewing since <b>' + new Date(first).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + '</b>' : 'No reviews yet') + '</div></div></div>' +
     '<div class="meter" role="img" aria-label="' + pct + '% ready"><i style="width:' + pct + '%"></i></div>' +
     '<div class="small muted">' + pct + '% of ' + (S.priceOnly ? 'price-sheet items' : 'all items') + ' are marketing-ready: photo, physical video and YouTube all acceptable (or marked not needed). Unbranded videos are not counted' + (S.cat ? ' (' + esc(S.cat) + ' only)' : '') + '.</div>' +
     '<dl class="rules"><dt>YouTube cutoff</dt><dd>Uploaded on or after ' + CUT.toLocaleDateString() + '</dd>' +
@@ -1125,8 +1279,8 @@ function filterSelect() {
 }
 function viewItems() {
   const list = filtered();
-  let h = '<div class="toolbar">' + segPicker() + rfSelects() + '</div><div class="toolbar">' + filterSelect() + catSelect('icat') +
-    '<label class="row small"><input type="checkbox" data-act="priceonly"' + (S.priceOnly ? ' checked' : '') + '> Price sheet only</label>' +
+  let h = '<div class="toolbar">' + (S.plist ? '' : segPicker()) + plistSelect() + rfSelects() + '</div>' + plistBar() + '<div class="toolbar">' + filterSelect() + (S.plist ? '' : catSelect('icat') +
+    '<label class="row small"><input type="checkbox" data-act="priceonly"' + (S.priceOnly ? ' checked' : '') + '> Price sheet only</label>') +
     '<span class="seg"><button data-act="layout" data-v="table" class="' + (S.layout === 'table' ? 'on' : '') + '">List</button>' +
     '<button data-act="layout" data-v="grid" class="' + (S.layout === 'grid' ? 'on' : '') + '">Grid</button></span>' +
     (S.layout === 'grid' ? '<span class="seg" aria-label="Tile size">' + ['s', 'm', 'l'].map(z => '<button data-act="size" data-v="' + z + '" class="' + (S.size === z ? 'on' : '') + '">' + z.toUpperCase() + '</button>').join('') + '</span>' : '') +
@@ -1410,9 +1564,64 @@ function vReviewInner(v) {
 }
 
 /* =============================== import =============================== */
+function picListNos() { const t = $('#plitems'); return (t ? t.value : (S.pic ? S.pic.text : '')).split(/[\n,;\t]+/).map(x => x.trim()).filter(Boolean).map(x => matchOcr(x) || x).filter((x, i, a) => a.findIndex(y => norm(y) === norm(x)) === i); }
+function picPreview(nos) {
+  const known = nos.filter(n => getItem(n)).length;
+  return '<div class="small muted" style="margin:6px 0">' + nf(nos.length) + ' item(s) · ' + nf(known) + ' found in the tracker' + (known < nos.length ? ' · <span class="err">' + nf(nos.length - known) + ' not in the tracker</span>' : '') + '</div>' +
+    '<div class="tablewrap" style="box-shadow:none;max-height:420px;overflow:auto"><table class="pictab"><thead><tr><th>#</th><th>Item #</th><th>Name</th><th>What needs to be done</th></tr></thead><tbody>' +
+    nos.map((n, i) => { const it = getItem(n); return '<tr' + (it ? ' class="click" data-act="open" data-no="' + esc(it.item_no) + '"' : '') + '><td class="muted">' + (i + 1) + '</td><td class="mono">' + esc(it ? it.item_no : n) + '</td><td>' + esc(it ? it.name : '') + '</td><td>' + (it ? esc(todoSummary(it)) : '<span class="err">Not in the tracker yet</span>') + '</td></tr>'; }).join('') +
+    '</tbody></table></div>';
+}
+function picOutHtml() {
+  const P = S.pic; if (!P) return '';
+  if (P.busy) return '<div class="small">' + esc(P.step || 'Working…') + '</div><div class="picprog"><i style="width:' + Math.round((P.frac || 0) * 100) + '%"></i></div>';
+  const nos = (P.text || '').split('\n').filter(Boolean);
+  const d = new Date(), defName = 'Testing list ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return (P.err ? '<p class="err small">' + esc(P.err) + '</p>' : '') +
+    '<div class="row" style="margin-top:12px;align-items:flex-start"><div class="grow" style="min-width:240px"><label class="small muted" for="plitems">Item numbers (one per line). Add any that were missed, or delete lines you don\'t want.</label>' +
+    '<textarea id="plitems" rows="8" class="noswipe">' + esc(P.text || '') + '</textarea>' +
+    (P.unknown && P.unknown.length ? '<div class="small muted" style="margin-top:6px">Also seen in the picture but not in the tracker (click to add): ' + P.unknown.map(u => '<button class="sm unk" data-act="picadd" data-v="' + esc(u) + '">+ ' + esc(u) + '</button>').join('') + '</div>' : '') +
+    '</div></div>' +
+    '<div id="picprev">' + picPreview(picListNos()) + '</div>' +
+    '<div class="row" style="margin-top:10px"><input type="text" id="plname" value="' + esc(P.name || defName) + '" aria-label="List name" style="width:240px">' +
+    (canEdit() ? '<button class="pri" data-act="picsave">Save as priority list</button>' : '') + '<button data-act="picxlsx">Download summary (Excel)</button><button data-act="picclear">Clear</button></div>';
+}
+async function handlePictures(files) {
+  files = [...files].filter(f => /^image\//.test(f.type));
+  if (!files.length) { toast('Choose a picture (PNG or JPG).'); return; }
+  const prev = S.pic && S.pic.text ? S.pic.text.split('\n').filter(Boolean) : [];
+  const prevUnk = S.pic && S.pic.unknown ? S.pic.unknown : [];
+  S.pic = { busy: true, step: 'Starting…', frac: 0, name: S.pic && S.pic.name };
+  const paint = () => { const o = $('#picout'); if (o) o.innerHTML = picOutHtml(); };
+  paint();
+  let items = prev.slice(), unknown = prevUnk.slice(), err = '';
+  for (let i = 0; i < files.length; i++) {
+    try {
+      const r = await readItemsFromPicture(files[i], (step, frac) => { S.pic.step = (files.length > 1 ? 'Picture ' + (i + 1) + ' of ' + files.length + ': ' : '') + step; S.pic.frac = (i + (frac || 0)) / files.length; paint(); });
+      r.items.forEach(n => { if (!items.some(x => norm(x) === norm(n))) items.push(n); });
+      r.unknown.forEach(u => { if (!unknown.includes(u)) unknown.push(u); });
+    } catch (e) { err = errMsg(e); }
+  }
+  S.pic = { text: items.join('\n'), unknown: unknown, err: err || (items.length ? '' : 'No item numbers from the tracker were found in that picture. Type them in below, or try a sharper or closer screenshot of the item-number column.'), name: S.pic.name };
+  paint();
+  if (items.length) toast('Found ' + items.length + ' item number(s). Check the list below.', 6000);
+}
+
+function viewTesting() {
+  let h = '<div class="stack">' +
+    '<div class="card" id="piccard"><h2 class="sec">Testing list from a picture</h2><p class="muted small" style="margin-top:0">Upload a picture or screenshot of the testing spreadsheet, or paste one here with <b>Ctrl+V</b>. The item numbers in the left-hand columns are read and matched to the tracker. Check the list, then download a summary of what each item needs, or save it as a priority list for the Items tab.</p>' +
+    '<label class="picdrop" id="picdrop" style="display:block;cursor:pointer"><input type="file" id="picfile" accept="image/*" multiple hidden>📷 Choose picture(s), drop them here, or paste a screenshot</label>' +
+    (S.pic ? '' : '<div style="margin-top:8px"><button class="sm" data-act="pictype">Or type / paste item numbers instead</button></div>') +
+    '<div id="picout">' + picOutHtml() + '</div></div>';
+  if (S.lists.length) h += '<div class="card"><h2 class="sec">Saved priority lists</h2><div class="tablewrap" style="box-shadow:none"><table><thead><tr><th>Name</th><th>Items</th><th>Fully reviewed</th><th>Saved</th><th></th></tr></thead><tbody>' +
+    S.lists.map(l => { const its = l.items.map(getItem).filter(Boolean); return '<tr><td><b>' + esc(l.name) + '</b></td><td>' + nf(l.items.length) + '</td><td>' + nf(its.filter(it => reviewProgress(it) === 'All reviewed').length) + '</td><td class="small muted">' + day(l.created_at) + (l.created_by ? ' by ' + esc(l.created_by) : '') + '</td>' +
+      '<td><button class="sm pri" data-act="plopen" data-id="' + l.id + '">Open in Items</button> <button class="sm" data-act="plxlsx" data-id="' + l.id + '">Download summary</button></td></tr>'; }).join('') + '</tbody></table></div></div>';
+  return h + '</div>';
+}
 function viewImport() {
   const waiting = S.items.filter(FMAP.new_links[2]).length;
-  let h = '<div class="stack">' + (waiting ? '<div class="card row"><div class="grow"><b>' + nf(waiting) + ' item(s)</b> have new links waiting for review.</div><button class="pri" data-act="reviewnew">Review them now</button></div>' : '') + '<div class="card"><h2 class="sec">Load your whole spreadsheet</h2><p class="muted small" style="margin-top:0">In your Google Sheet choose <b>File → Download → Microsoft Excel (.xlsx)</b>, then pick that file here. Items, links, statuses, notes, categories and your extra price-list columns are all loaded. Empty cells never erase what is already saved, so you can load an updated copy any time.</p>' +
+  let h = '<div class="stack">' + (waiting ? '<div class="card row"><div class="grow"><b>' + nf(waiting) + ' item(s)</b> have new links waiting for review.</div><button class="pri" data-act="reviewnew">Review them now</button></div>' : '') +
+    '<div class="card"><h2 class="sec">Load your whole spreadsheet</h2><p class="muted small" style="margin-top:0">In your Google Sheet choose <b>File → Download → Microsoft Excel (.xlsx)</b>, then pick that file here. Items, links, statuses, notes, categories and your extra price-list columns are all loaded. Empty cells never erase what is already saved, so you can load an updated copy any time.</p>' +
     '<div class="row"><input type="file" id="wbfile" accept=".xlsx,.xls,.csv"></div><div id="wbsum"></div></div>';
   h += '<div class="card"><h2 class="sec">1 · Master item list</h2><p class="muted small" style="margin-top:0">Upload the price sheet (Excel or CSV). It needs an item-number column; name and product-category columns are optional. New items are added and existing items get their name updated.</p>' +
     '<div class="row"><input type="file" id="mfile" accept=".xlsx,.xls,.csv"><label class="small row"><input type="checkbox" id="moff"> Mark items that are not in this file as "not on price sheet"</label></div><div id="mmap"></div></div>';
@@ -1593,11 +1802,12 @@ function viewSettings() {
 
 /* =============================== users (administrators) =============================== */
 const roleLabel = r => r === 'Admin' ? 'Administrator' : r;
+function refreshUsers() { const b = document.getElementById('usersbox'); if (b) b.innerHTML = viewUsers(); }
 async function loadUsers() {
   try {
     const r = await Promise.all([call('listUsers'), call('listLogins', S.logUser).catch(() => null)]);
     S.usersList = r[0]; S.logins = r[1];
-    if (S.view === 'users') main.innerHTML = viewUsers();
+    refreshUsers();
   } catch (e) { toast(errMsg(e), 6000); }
 }
 /** "Chrome on Windows" from the browser's user-agent text. */
@@ -1656,7 +1866,7 @@ function viewUsers() {
 async function saveUser(u, okMsg) {
   try { S.usersList = await call('saveUser', u); toast(okMsg); }
   catch (e) { toast(errMsg(e), 7000); }
-  if (S.view === 'users') main.innerHTML = viewUsers();
+  refreshUsers();
 }
 
 /* =============================== export =============================== */
@@ -1885,6 +2095,29 @@ document.addEventListener('click', async e => {
       const c = $('#desccard'); if (c) c.outerHTML = descCard(getItem(no));
       break;
     }
+    case 'picadd': { const t = $('#plitems'); if (t) { t.value = (t.value.trim() ? t.value.trim() + '\n' : '') + el.dataset.v; S.pic.text = t.value; S.pic.unknown = (S.pic.unknown || []).filter(u => u !== el.dataset.v); $('#picout').innerHTML = picOutHtml(); } break; }
+    case 'picclear': S.pic = null; $('#picout').innerHTML = ''; break;
+    case 'pictype': S.pic = { text: '' }; el.parentNode.remove(); $('#picout').innerHTML = picOutHtml(); $('#plitems').focus(); break;
+    case 'picxlsx': { const nos = picListNos(); if (!nos.length) { toast('The list is empty.'); break; } downloadSummary(nos, ($('#plname') || {}).value); break; }
+    case 'picsave': {
+      const nos = picListNos(), name = (($('#plname') || {}).value || '').trim();
+      if (!nos.length) { toast('The list is empty.'); break; }
+      try {
+        const l = await call('saveList', { name: name || 'Testing list', items: nos });
+        S.lists = [l].concat(S.lists.filter(x => x.id !== l.id)); S.pic = null;
+        S.plist = String(l.id); S.filter = 'all'; S.rfState = ''; S.search = ''; if ($('#q')) $('#q').value = ''; S.keep.clear();
+        toast('Saved “' + esc(l.name) + '” with ' + nos.length + ' item(s)'); go('items');
+      } catch (err) { toast(errMsg(err), 7000); }
+      break;
+    }
+    case 'plxlsx': { const l = S.lists.find(x => String(x.id) === String(el.dataset.id || S.plist)); if (l) downloadSummary(l.items, l.name); break; }
+    case 'plopen': S.plist = String(el.dataset.id); S.filter = 'all'; S.rfState = ''; S.search = ''; if ($('#q')) $('#q').value = ''; S.keep.clear(); go('items'); break;
+    case 'pldelete': {
+      const l = S.lists.find(x => String(x.id) === String(S.plist)); if (!l) break;
+      if (!(await ask('Delete “' + esc(l.name) + '”?', 'Only the list is deleted. The items and their reviews stay as they are.', 'Delete list'))) break;
+      try { await call('deleteList', l.id); S.lists = S.lists.filter(x => x.id !== l.id); S.plist = ''; S.keep.clear(); render(); toast('List deleted'); } catch (err) { toast(errMsg(err), 7000); }
+      break;
+    }
     case 'seg': S.seg = el.dataset.v; S.shown = 300; render(); break;
     case 'toggleprice': save(no, { on_price_sheet: el.checked ? 'Yes' : 'No' }); break;
     case 'embed': {
@@ -1995,6 +2228,8 @@ document.addEventListener('click', async e => {
 document.addEventListener('change', async e => {
   const el = e.target, act = el.dataset.act;
   if (act === 'setfilter') { S.keep.clear(); S.filter = el.value; S.shown = 300; render(); }
+  else if (act === 'plist') { S.plist = el.value; S.keep.clear(); S.shown = 300; render(); }
+  else if (el.id === 'picfile' && el.files.length) { handlePictures(el.files); el.value = ''; }
   else if (act === 'rfwhich') { S.keep.clear(); S.rfWhich = el.value; S.rfState = ''; S.shown = 300; render(); }
   else if (act === 'rfstate') { S.keep.clear(); S.rfState = el.value; S.shown = 300; render(); }
   else if (act === 'setcat') { S.cat = el.value; S.shown = 300; render(); }
@@ -2003,7 +2238,7 @@ document.addEventListener('change', async e => {
     if (me && ((act === 'urole' && v !== 'Admin') || (act === 'ustatus' && v === 'Disabled'))) {
       const ok = await ask(act === 'urole' ? 'Change your own role?' : 'Disable your own account?', act === 'urole'
         ? 'You will lose access to Settings and this Users page right away.' : 'You will be signed out and will not be able to sign back in.', 'Yes, continue');
-      if (!ok) { main.innerHTML = viewUsers(); return; }
+      if (!ok) { refreshUsers(); return; }
     }
     const patch = { username: u }; patch[act === 'urole' ? 'role' : 'status'] = v;
     await saveUser(patch, esc(u) + (act === 'urole' ? ' is now ' + (v === 'Admin' ? 'an Administrator' : 'a' + (v === 'Editor' ? 'n ' : ' ') + v) : ' is now ' + v));
@@ -2037,6 +2272,21 @@ document.addEventListener('change', async e => {
   else if (el.id === 'mfile' && el.files[0]) { try { mapMaster(await readFileRows(el.files[0])); } catch (err) { toast('Could not read that file: ' + errMsg(err)); } }
   else if (el.id === 'lfile' && el.files[0]) { try { mapLinks(await readFileRows(el.files[0])); } catch (err) { toast('Could not read that file: ' + errMsg(err)); } }
 });
+let plT;
+document.addEventListener('input', e => {
+  if (e.target.id !== 'plitems') return;
+  clearTimeout(plT); plT = setTimeout(() => { if (S.pic) S.pic.text = e.target.value; const p = $('#picprev'); if (p) p.innerHTML = picPreview(picListNos()); }, 300);
+});
+document.addEventListener('paste', e => {
+  if (S.view !== 'testing') return;
+  const files = [...((e.clipboardData && e.clipboardData.files) || [])].filter(f => /^image\//.test(f.type));
+  if (files.length) { e.preventDefault(); handlePictures(files); }
+});
+['dragover', 'dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => {
+  const z = e.target.closest && e.target.closest('#picdrop'); if (!z) return;
+  e.preventDefault(); z.classList.toggle('on', ev === 'dragover');
+  if (ev === 'drop' && e.dataTransfer && e.dataTransfer.files.length) handlePictures(e.dataTransfer.files);
+}));
 let qT;
 $('#q').addEventListener('input', e => {
   clearTimeout(qT);
