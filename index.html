@@ -203,6 +203,13 @@ td .mini{width:64px;height:40px;object-fit:cover;border-radius:4px;display:block
 .naline{font-size:13px;color:var(--muted);padding:10px 12px;border:1px dashed var(--line);border-radius:8px}
 .naopts{margin-top:6px}
 .wgroups{display:grid;gap:12px}
+.updflag{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;border:1px solid var(--warn);background:var(--warn-bg);color:var(--ink);border-radius:8px;padding:6px 10px;margin:8px 0;font-size:12.5px}
+.updflag b{color:var(--warn)}
+.updflag button{padding:2px 8px;font-size:12px}
+.s-upd{color:var(--warn);background:var(--warn-bg)}
+.psum .flagged{border-color:var(--warn)}
+.psum .updtxt{color:var(--warn)}
+.protectbox{border:1px solid var(--line);border-left:3px solid var(--new);border-radius:8px;padding:10px 12px;background:var(--sunk);font-size:13.5px}
 .ic{width:1.15em;height:1.15em;vertical-align:-.2em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
 .filtbtn{display:inline-flex;gap:6px;align-items:center}
 .filtbtn.on{border-color:var(--accent);color:var(--accent)}
@@ -524,7 +531,8 @@ function buildPatch(base, patch) {
     if (m && m[2] === 'status') {
       if (['', 'Acceptable', 'Needs update', 'Unacceptable'].indexOf(v) < 0) throw new Error('Unknown status: ' + v);
       out[k] = v; out[m[1] + '_reviewed_at'] = v ? now : ''; out[m[1] + '_reviewed_by'] = v ? user : '';
-      log.push({ item_no: no, field: k, old: old, new: v || '(cleared)' });
+      if (base[m[1] + '_upd_at']) { out[m[1] + '_upd_at'] = ''; out[m[1] + '_upd_by'] = ''; out[m[1] + '_upd_src'] = ''; out[m[1] + '_upd_kind'] = ''; }   // reviewed: the "updated" flag is done
+      log.push({ item_no: no, field: k, old: old, new: (v || '(cleared)') + (base[m[1] + '_upd_at'] ? ' (reviewed update)' : '') });
       return;
     }
     if (/_quality$/.test(k) && ['', '720p', '1080p', '4K'].indexOf(v) < 0) throw new Error('Quality must be 720p, 1080p or 4K.');
@@ -566,6 +574,14 @@ const BE = {
     return d;
   },
   getItemLog: no => rpc('mp_get_item_log', { p_token: tok(), p_item_no: no }),
+  async cleanExtras() {
+    const rows = S.items.filter(it => it.extra && Object.keys(it.extra).some(k => !DESC_KEYS.includes(k))).map(it => {
+      const keep = {}; DESC_KEYS.forEach(k => { if (it.extra[k]) keep[k] = it.extra[k]; });
+      return { item_no: it.item_no, patch: { extra: keep } };
+    });
+    if (rows.length) await saveRows(rows, [{ item_no: '(settings)', field: 'price-list details', old: '', new: 'Removed from ' + rows.length + ' items' }]);
+    return rows.length;
+  },
   saveList: list => rpc('mp_save_list', { p_token: tok(), p_list: list }),
   deleteList: id => rpc('mp_delete_list', { p_token: tok(), p_id: id }),
   async saveItem(no, patch, base) {
@@ -611,6 +627,34 @@ const BE = {
     const save = Object.values(work).filter(w => Object.keys(w.patch).length).map(w => ({ item_no: w.base.item_no, patch: w.patch }));
     await saveRows(save, logs);
     await BE._syncVideoStatuses(save);
+    return res;
+  },
+  /** Pasted links or item numbers from the video editor: flag each asset "updated" (approval kept), update the link if it changed, and save the batch as a list. */
+  async flagUpdates(rows, listName) {
+    const work = {}, logs = [], now = new Date().toISOString(), res = { flagged: 0, linkChanged: 0, items: [], notFound: [] };
+    rows.forEach(r => {
+      const it = getItem(r.item_no); if (!it) { res.notFound.push(r.item_no); return; }
+      const a = r.type, k = norm(it.item_no);
+      const w = work[k] || (work[k] = { it: it, patch: {} });
+      const cur = w.patch[a + '_url'] != null ? w.patch[a + '_url'] : it[a + '_url'];
+      if (r.url && !sameLink(a, r.url, cur)) {
+        w.patch[a + '_url'] = r.url; w.patch[a + '_prev_url'] = cur || '';
+        w.patch[a + '_link_updated_at'] = now; w.patch[a + '_link_updated_by'] = S.user;
+        if (a === 'yt') { w.patch.yt_id = ytId(r.url) || ''; ['yt_published', 'yt_title', 'yt_channel', 'yt_definition'].forEach(f => { w.patch[f] = ''; }); }
+        logs.push({ item_no: it.item_no, field: a + '_url', old: cur || '', new: r.url + ' (pasted update)' });
+        res.linkChanged++;
+      }
+      if (!w.patch[a + '_upd_at']) {
+        w.patch[a + '_upd_at'] = now; w.patch[a + '_upd_by'] = S.user; w.patch[a + '_upd_src'] = listName;
+        w.patch[a + '_upd_kind'] = w.patch[a + '_url'] != null && w.patch[a + '_url'] !== (it[a + '_url'] || '') ? (it[a + '_url'] ? 'New link' : 'Link added') : 'Same link, video updated';
+        logs.push({ item_no: it.item_no, field: a + ' updated', old: '', new: 'Flagged for review: ' + listName });
+        res.flagged++;
+      }
+    });
+    const save = Object.values(work).map(w => ({ item_no: w.it.item_no, patch: w.patch }));
+    if (save.length) { await saveRows(save, logs); await BE._syncVideoStatuses(save.filter(x => x.patch.yt_id)); }
+    res.items = save.map(x => x.item_no);
+    if (res.items.length) { try { res.list = await rpc('mp_save_list', { p_token: tok(), p_list: { name: listName, items: res.items } }); } catch (e) { res.listError = errMsg(e); } }
     return res;
   },
   /** Approve a new channel upload as an item's YouTube video (details come from the channel scan, not a separate lookup). */
@@ -677,13 +721,15 @@ const BE = {
     S.settings.last_scan = new Date().toISOString();
     return { scanned: Object.keys(found).length, added: added.length, errors: errors };
   },
-  async importWorkbook(parsed, markOff) {   // parsed = parseWorkbook(...) result
-    const rows = parsed.items.map(x => ({ item_no: (getItem(x.item_no) || x).item_no, patch: x.patch }));
-    await saveRows(rows, [{ item_no: '(import)', field: 'spreadsheet', old: '', new: 'Loaded ' + rows.length + ' items from ' + parsed.fileName }]);
+  async importWorkbook(parsed, markOff, overrideEdited) {   // parsed = parseWorkbook(...) result
+    const plan = planWorkbook(parsed, overrideEdited);
+    const rows = plan.rows;
+    await saveRows(rows, [{ item_no: '(import)', field: 'spreadsheet', old: '', new: 'Loaded ' + rows.length + ' items from ' + parsed.fileName +
+      (plan.kept.length ? ' (kept ' + plan.kept.length + ' link(s) edited in the program)' : '') }].concat(plan.log));
     if (parsed.categories.length) await rpc('mp_set_categories', { p_token: tok(), p_list: parsed.categories });
     let markedOff = 0;
     if (markOff) markedOff = await rpc('mp_mark_off_sheet', { p_token: tok(), p_keep: rows.map(r => r.item_no) });
-    return { items: rows.length, categories: parsed.categories.length, markedOff: markedOff };
+    return { items: rows.length, categories: parsed.categories.length, markedOff: markedOff, kept: plan.kept.length, replaced: plan.replaced };
   },
   async saveSettings(obj) {
     const o = {}; Object.keys(obj).forEach(k => { o[k] = obj[k] == null ? '' : String(obj[k]); });
@@ -696,6 +742,48 @@ const BE = {
 };
 
 /* =============================== whole-spreadsheet import =============================== */
+/* Links are never changed silently. Loading a spreadsheet:
+   - fills a link only where the tracker has none, or where the spreadsheet has a different link that nobody changed in the program;
+   - keeps any link someone changed in the program (card edit, paste import or approved YouTube upload) unless "replace" is ticked;
+   - never rewrites a YouTube link that points to the same video in a different format (youtu.be vs watch?v=);
+   - keeps upload date / title / channel already in the tracker for the same video;
+   - when it does replace a link, keeps the old one as "previous", logs it, and resets that asset's review. */
+const LINK_META = ['yt_id', 'yt_published', 'yt_title', 'yt_channel'];
+function sameLink(a, x, y) {
+  if (!x || !y) return false;
+  if (a === 'yt') { const i = ytId(x), j = ytId(y); if (i && j) return i === j; }
+  return String(x).trim() === String(y).trim();
+}
+function planWorkbook(parsed, overrideEdited) {
+  const rows = [], log = [], kept = [];
+  let replaced = 0;
+  parsed.items.forEach(x => {
+    const cur = getItem(x.item_no), patch = Object.assign({}, x.patch);
+    if (cur) {
+      ['photo', 'video', 'ub', 'yt'].forEach(a => {
+        const sv = patch[a + '_url'], cv = cur[a + '_url'];
+        const dropMeta = () => { if (a === 'yt') LINK_META.forEach(k => { delete patch[k]; }); };
+        if (!sv) { if (a === 'yt' && cv) LINK_META.forEach(k => { if (cur[k]) delete patch[k]; }); return; }   // nothing in the sheet: keep everything
+        if (!cv) return;                                                                                          // tracker empty: fill it
+        if (sameLink(a, sv, cv)) { delete patch[a + '_url']; if (a === 'yt') LINK_META.forEach(k => { if (cur[k]) delete patch[k]; }); return; }
+        if (cur[a + '_link_updated_at'] && !overrideEdited) {                                                     // changed in the program: protect it
+          delete patch[a + '_url']; dropMeta();
+          ['_status', '_note', '_quality'].forEach(f => { delete patch[a + f]; });
+          kept.push({ item_no: cur.item_no, asset: a, program: cv, sheet: sv });
+          return;
+        }
+        // the spreadsheet has a different link: use it, but keep a record and start that review again
+        replaced++;
+        patch[a + '_prev_url'] = cv;
+        if (!(a + '_status' in patch)) { patch[a + '_status'] = ''; patch[a + '_reviewed_at'] = ''; patch[a + '_reviewed_by'] = ''; }
+        if (a === 'yt') { patch.yt_id = ytId(sv) || ''; ['yt_published', 'yt_title', 'yt_channel', 'yt_definition'].forEach(k => { if (!(k in patch)) patch[k] = ''; }); }
+        log.push({ item_no: cur.item_no, field: a + '_url', old: cv, new: sv + ' (from spreadsheet)' });
+      });
+    }
+    rows.push({ item_no: (cur || x).item_no, patch: patch });
+  });
+  return { rows: rows, log: log, kept: kept, replaced: replaced };
+}
 const SHEET_COLS = [
   ['item_no', 'Item #'], ['name', 'Item Name'], ['category', 'Product Category'], ['on_price_sheet', 'On Price Sheet'],
   ['photo_url', 'Photo Link'], ['photo_status', 'Photo Status'], ['photo_note', 'Photo Note'],
@@ -747,7 +835,7 @@ function parseWorkbook(wb, fileName) {
     map.forEach((m, i) => {
       if (!m) return;
       const v = cellText(r[i]); if (!v) return;
-      if (m.extra) { extra[m.extra] = v; extraCols.add(m.extra); return; }
+      if (m.extra) { if (DESC_KEYS.includes(m.extra)) { extra[m.extra] = v; extraCols.add(m.extra); } return; }   // price-list columns are not kept
       if (m.fourK) { if (/^(yes|true|4k)$/i.test(v) && !patch[m.key]) patch[m.key] = '4K'; return; }
       patch[m.key] = v;
     });
@@ -772,7 +860,7 @@ function parseWorkbook(wb, fileName) {
 
 /* Shows "Working…" while a request is in flight. */
 let pending = 0, busyT;
-const BUSY_LABEL = { saveItem: 'Saving…', getData: 'Loading…', importLinks: 'Importing…', importItems: 'Importing…', approveVideo: 'Saving…', decideVideo: 'Saving…',
+const BUSY_LABEL = { saveItem: 'Saving…', getData: 'Loading…', importLinks: 'Importing…', flagUpdates: 'Saving updates…', cleanExtras: 'Removing price-list details…', importItems: 'Importing…', approveVideo: 'Saving…', decideVideo: 'Saving…',
   scanChannels: 'Scanning YouTube channels…', importWorkbook: 'Loading your spreadsheet…',
   saveUser: 'Saving account…', saveList: 'Saving list…', deleteList: 'Deleting list…', listUsers: 'Loading accounts…', listLogins: 'Loading sign-in log…', login: 'Signing in…', changePassword: 'Saving password…', saveSettings: 'Saving settings…', getItemLog: 'Loading history…' };
 function busy(on, fn) {
@@ -905,6 +993,17 @@ const ICON = {
   check: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>'
 };
 const PASS_ASSETS = ['photo', 'video', 'yt'];
+/* An asset is flagged "updated" when someone pastes its link or item number on Import links (the video editor re-shot it).
+   The flag never changes the approval; choosing a status on that asset (or "Passed") clears it. */
+const isFlagged = (it, a) => !!(it && it[a + '_upd_at']);
+const needsLook = (it, a) => isFlagged(it, a) || !!(it[a + '_url'] && it[a + '_link_updated_at'] && !it[a + '_status']);
+const UPD_PREFIX = 'Video update · ';
+const isUpdList = l => String(l && l.name || '').startsWith(UPD_PREFIX);
+function updFlag(it, k) {
+  if (!isFlagged(it, k)) return '';
+  const keep = it[k + '_status'] && canEdit() ? ' <button class="sm" data-act="status" data-k="' + k + '" data-no="' + esc(it.item_no) + '" data-v="' + esc(it[k + '_status']) + '">Keep status as is</button>' : '';
+  return '<div class="updflag"><span>↻ Updated ' + esc(day(it[k + '_upd_at'])) + (it[k + '_upd_by'] ? ' by ' + esc(it[k + '_upd_by']) : '') + '. <b>Review due as soon as possible.</b></span>' + keep + '</div>';
+}
 /* Review status of one asset, in plain words. */
 const reviewedA = (it, a) => !!(it[a + '_url'] && it[a + '_status']);
 function assetState(it, a) {
@@ -912,7 +1011,7 @@ function assetState(it, a) {
   return {
     reviewed: reviewedA(it, a), notReviewed: !!it[a + '_url'] && !st,
     acceptable: !!it[a + '_url'] && st === 'Acceptable', needsUpdate: st === 'Needs update' && !!it[a + '_url'], unacceptable: st === 'Unacceptable' && !!it[a + '_url'],
-    failed: (!!it[a + '_url'] && BAD.has(st)) || e === 'Expired', missing: e === 'Missing', notNeeded: e === 'Not needed', due: e === 'Review due', expired: e === 'Expired'
+    failed: (!!it[a + '_url'] && BAD.has(st)) || e === 'Expired', missing: e === 'Missing', notNeeded: e === 'Not needed', due: e === 'Review due', expired: e === 'Expired', updated: needsLook(it, a)
   };
 }
 /* Item-level review progress over the three that count. */
@@ -923,15 +1022,15 @@ function reviewProgress(it) {
   return done ? 'Partly reviewed (' + done + ' of ' + need.length + ')' : 'Not reviewed';
 }
 const RF_WHICH = [['item', 'Whole item'], ['photo', 'Photo'], ['video', 'Physical video'], ['yt', 'YouTube'], ['ub', 'Unbranded video']];
-const RF_ITEM = [['', 'Any status'], ['reviewed', 'Fully reviewed'], ['partly', 'Partly reviewed'], ['notreviewed', 'Not reviewed at all'], ['passed', 'Passed (all acceptable)'], ['failed', 'Failed (needs update / unacceptable)'], ['progress', 'Not passed yet (in progress)']];
-const RF_ASSET = [['', 'Any status'], ['reviewed', 'Reviewed'], ['notreviewed', 'Not reviewed yet'], ['acceptable', 'Acceptable (passed)'], ['needsUpdate', 'Needs update'], ['unacceptable', 'Unacceptable'], ['failed', 'Failed (needs update or unacceptable)'], ['due', 'Review due again'], ['missing', 'Missing link'], ['notNeeded', 'Not needed']];
+const RF_ITEM = [['', 'Any status'], ['reviewed', 'Fully reviewed'], ['partly', 'Partly reviewed'], ['notreviewed', 'Not reviewed at all'], ['passed', 'Passed (all acceptable)'], ['failed', 'Failed (needs update / unacceptable)'], ['progress', 'Not passed yet (in progress)'], ['updated', 'Has updated links to review']];
+const RF_ASSET = [['', 'Any status'], ['reviewed', 'Reviewed'], ['notreviewed', 'Not reviewed yet'], ['acceptable', 'Acceptable (passed)'], ['needsUpdate', 'Needs update'], ['unacceptable', 'Unacceptable'], ['failed', 'Failed (needs update or unacceptable)'], ['due', 'Review due again'], ['missing', 'Missing link'], ['notNeeded', 'Not needed'], ['updated', 'Updated: needs review']];
 function rfTest(it) {
   const w = S.rfWhich || 'item', v = S.rfState || '';
   if (!v) return true;
   if (w === 'item') {
     const r = itemResult(it).r, p = reviewProgress(it);
     return v === 'reviewed' ? p === 'All reviewed' : v === 'partly' ? /^Partly/.test(p) : v === 'notreviewed' ? p === 'Not reviewed'
-      : v === 'passed' ? r === 'Passed' : v === 'failed' ? r === 'Failed' : v === 'progress' ? r !== 'Passed' : true;
+      : v === 'passed' ? r === 'Passed' : v === 'failed' ? r === 'Failed' : v === 'progress' ? r !== 'Passed' : v === 'updated' ? ASSETS.some(a => needsLook(it, a.k)) : true;
   }
   if (w === 'yt' && v === 'acceptable') return eff(it, 'yt') === 'Acceptable' || eff(it, 'yt') === 'Review due';
   return !!assetState(it, w)[v];
@@ -946,13 +1045,15 @@ const andList = a => a.length < 2 ? (a[0] || '') : a.slice(0, -1).join(', ') + '
 const LBL3 = { photo: 'Photo', video: 'Physical video', yt: 'YouTube' };
 function todoSummary(it) {
   if (!it) return 'Not in the tracker yet';
-  if (isReady(it)) return 'All good: photo, physical video and YouTube are acceptable';
+  if (isReady(it) && !PASS_ASSETS.some(a => isFlagged(it, a))) return 'All good: photo, physical video and YouTube are acceptable';
   const st = PASS_ASSETS.map(a => [a, eff(it, a)]);
   const bad = st.filter(x => BAD.has(x[1])).map(x => x[0]);
   const old = st.filter(x => x[1] === 'Expired').map(x => x[0]);
   const miss = st.filter(x => x[1] === 'Missing').map(x => x[0]);
   const unrev = st.filter(x => x[1] === 'Unreviewed' || x[1] === 'Review due').map(x => x[0]);
   const parts = [];
+  const upd = PASS_ASSETS.filter(a => isFlagged(it, a));
+  if (upd.length) parts.push(andList(upd.map(a => LBL3[a])) + (upd.length > 1 ? ' were' : ' was') + ' updated: needs review');
   if (unrev.length && !bad.length && !old.length && unrev.length === st.filter(x => x[1] !== 'Not needed' && x[1] !== 'Missing').length && !st.some(x => x[1] === 'Acceptable'))
     parts.push("Hasn't been reviewed yet");
   else if (unrev.length) parts.push(andList(unrev.map(a => LBL3[a])) + (unrev.length > 1 ? " haven't" : " hasn't") + ' been reviewed yet');
@@ -973,7 +1074,32 @@ function summarySheet(nos, title) {
   });
   return [{ name: String(title || 'Priority list').replace(/[\\\/?*\[\]:]/g, ' ').slice(0, 31), rows: out }];
 }
+/* Update list sheet: one row per item with the three links, their current status and what still needs review.
+   reasons (optional, from a preview before saving): { "ITEM#": { video: 'Same link: flagged as updated', … } } */
+function updateSheet(nos, title, reasons) {
+  const parts = [['video', 'Physical video'], ['yt', 'YouTube'], ['photo', 'Photo']];
+  const out = [['Item #', 'Item name', 'Needs review because', 'Still needs review?', 'Physical video link', 'Physical video status', 'YouTube link', 'YouTube status', 'Photo link', 'Photo status', 'Updated on', 'Updated by']];
+  nos.forEach(no => {
+    const it = getItem(no);
+    if (!it) { out.push([no, '', 'Not in the tracker yet', '', '', '', '', '', '', '', '', '']); return; }
+    const why = [], rs = reasons && reasons[it.item_no];
+    let when = '', who = '';
+    parts.forEach(([a, lbl]) => {
+      if (rs && rs[a]) why.push(lbl + ': ' + rs[a]);
+      else if (isFlagged(it, a)) { why.push(lbl + ': ' + (it[a + '_upd_kind'] || 'updated')); when = when || it[a + '_upd_at']; who = who || it[a + '_upd_by']; }
+    });
+    const still = ASSETS.some(a => isFlagged(it, a.k)) || !!rs;
+    out.push([it.item_no, it.name || '', why.join('; ') || 'Reviewed', still ? 'Yes' : 'No',
+      it.video_url || '', eff(it, 'video'), it.yt_url || '', eff(it, 'yt'), it.photo_url || '', eff(it, 'photo'), when ? isoDay(when) : '', who || ''].map(v => v == null ? '' : v));
+  });
+  return [{ name: String(title || 'Updated links').replace(/[\\\/?*\[\]:]/g, ' ').slice(0, 31), rows: out }];
+}
+function downloadUpdates(nos, title, reasons) {
+  const fname = String(title || 'Updated links').replace(/[^\w ()-]+/g, ' ').replace(/\s+/g, ' ').trim() + ' ' + isoDay(new Date()) + '.xlsx';
+  try { XLSX.writeFile(toWorkbook(updateSheet(nos, title, reasons)), fname); toast('Downloading ' + esc(fname)); } catch (e) { toast('Download failed: ' + errMsg(e), 7000); }
+}
 function downloadSummary(nos, title) {
+  if (String(title || '').startsWith(UPD_PREFIX)) return downloadUpdates(nos, title);
   const fname = String(title || 'Priority list').replace(/[^\w ()-]+/g, ' ').trim() + ' summary ' + isoDay(new Date()) + '.xlsx';
   try { XLSX.writeFile(toWorkbook(summarySheet(nos, title)), fname); toast('Downloading ' + esc(fname)); } catch (e) { toast('Download failed: ' + errMsg(e), 7000); }
 }
@@ -1060,6 +1186,7 @@ async function readItemsFromPicture(file, onStep) {
 
 /* Sort: still needs reviewing first, then reviewed-but-not-passed, then passed. */
 function workRank(it) {
+  if (ASSETS.some(a => isFlagged(it, a.k))) return 0;
   if (isReady(it)) return 2;
   return PASS_ASSETS.some(a => { const e = eff(it, a); return e === 'Unreviewed' || e === 'Review due' || e === 'Missing'; }) ? 0 : 1;
 }
@@ -1081,7 +1208,7 @@ function resultBadge(it) {
 
 const FILTERS = [
   ['all', 'All items', () => true],
-  ['new_links', 'New links waiting for review', it => ASSETS.some(a => it[a.k + '_url'] && it[a.k + '_link_updated_at'] && !it[a.k + '_status'])],
+  ['new_links', 'Updated: needs review (new or updated links)', it => ASSETS.some(a => needsLook(it, a.k))],
   ['passed', 'Item passed (photo, physical video and YouTube acceptable)', it => itemResult(it).r === 'Passed'],
   ['needs_review', 'Item needs review (something not reviewed yet or still missing)', it => itemResult(it).r === 'Needs review'],
   ['failed', 'Item failed (marked needs update / unacceptable, or YouTube too old)', it => itemResult(it).r === 'Failed'],
@@ -1125,7 +1252,7 @@ const RANGES = [[7, 'Last 7 days'], [30, 'Last month'], [90, 'Last 3 months'], [
 const rangeLabel = d => (RANGES.find(r => r[0] === d) || [d, 'Last ' + d + ' days'])[1];
 function rangeLists(days) {
   const since = days ? Date.now() - days * 864e5 : 0;
-  return S.lists.filter(l => new Date(l.created_at).getTime() >= since);
+  return S.lists.filter(l => !isUpdList(l) && new Date(l.created_at).getTime() >= since);
 }
 /* One row per item across those lists: how often it was tested and when. */
 function rangeRows(days) {
@@ -1186,7 +1313,7 @@ function plistSelect() {
   if (!S.lists.length) return '';
   return '<span class="rfgroup"><label class="small muted" for="plsel">Priority list</label><select id="plsel" data-act="plist" aria-label="Priority list"><option value="">None (all items)</option>' +
     '<optgroup label="All testing lists combined">' + RANGES.map(r => '<option value="range:' + r[0] + '"' + ('range:' + r[0] === String(S.plist) ? ' selected' : '') + '>' + r[1] + '</option>').join('') + '</optgroup>' +
-    '<optgroup label="Single lists">' + S.lists.map(l => '<option value="' + l.id + '"' + (String(l.id) === String(S.plist) ? ' selected' : '') + '>' + esc(l.name) + ' · ' + l.items.length + ' items · ' + day(l.created_at) + '</option>').join('') + '</optgroup></select></span>';
+    '<optgroup label="Saved lists">' + S.lists.map(l => '<option value="' + l.id + '"' + (String(l.id) === String(S.plist) ? ' selected' : '') + '>' + esc(l.name) + ' · ' + l.items.length + ' items · ' + day(l.created_at) + '</option>').join('') + '</optgroup></select></span>';
 }
 function plistBar() {
   const l = S.plist && plistResolve(S.plist); if (!l) return '';
@@ -1360,7 +1487,7 @@ function viewDash() {
   h += '<div class="small muted">Click any segment to see those items.</div></div></div></div>';
 
   const groups = [['To review', ['new_links', 'needs_review', 'failed']], ['Missing', ['photo_missing', 'video_missing', 'yt_missing', 'yt_expired']], ['Done', ['passed']]];
-  const short = { new_links: 'New links to review', needs_review: 'Needs review', failed: 'Failed (needs fixing)', photo_missing: 'No photo', video_missing: 'No physical video', yt_missing: 'No YouTube video', yt_expired: 'YouTube too old', passed: 'Marketing-ready' };
+  const short = { new_links: 'Updated: needs review', needs_review: 'Needs review', failed: 'Failed (needs fixing)', photo_missing: 'No photo', video_missing: 'No physical video', yt_missing: 'No YouTube video', yt_expired: 'YouTube too old', passed: 'Marketing-ready' };
   h += '<div class="card"><h2 class="sec">Work lists</h2><div class="wgroups">';
   groups.forEach(g => {
     h += '<div><div class="wglabel">' + g[0] + '</div><div class="lists">';
@@ -1395,6 +1522,8 @@ function viewItems() {
     '<select data-act="export" aria-label="Download"><option value="">Download…</option>' +
     '<option value="xlsx-view">Excel: this view (' + nf(list.length) + ')</option>' +
     '<option value="xlsx-all">Excel: all items</option>' +
+    '<option value="simple-view">Simple Excel: this view (' + nf(list.length) + ')</option>' +
+    '<option value="simple-all">Simple Excel: all items</option>' +
     '<option value="csv-view">CSV: this view</option>' +
     '</select>' +
     '<button class="pri" data-go="review"' + (list.length ? '' : ' disabled') + '>Review these (' + nf(list.length) + ')</button></div>' +
@@ -1418,7 +1547,7 @@ function viewItems() {
         const kept = S.keep.has(norm(it.item_no)) && !(getFilter(S.filter)[2](it) && rfTest(it));
         return '<tr class="click' + (kept ? ' kept' : '') + '" data-act="open" data-no="' + esc(it.item_no) + '"><td>' + (th ? '<img class="mini" loading="lazy" alt="" src="' + esc(th) + '" onerror="this.style.visibility=\'hidden\'">' : '<div class="mini"></div>') + '</td>' +
           '<td class="mono stick">' + esc(it.item_no) + '</td><td>' + esc(it.name) + '</td><td>' + esc(it.category) + '</td><td class="small">' + SEG_LABEL[segOf(it)] + '</td><td>' + (kept ? '<span class="small muted">✓ reviewed just now</span><br>' : '') + (r => '<span class="chip s-' + RESULT_CLS[r] + '">' + r + '</span>')(itemResult(it).r) + '</td>' +
-          ASSETS.map(a => '<td>' + chip(eff(it, a.k)) + '</td>').join('') +
+          ASSETS.map(a => '<td>' + chip(eff(it, a.k)) + (isFlagged(it, a.k) ? ' <span class="chip s-upd" title="Updated: needs review">↻ Updated</span>' : '') + '</td>').join('') +
           '<td>' + day(it.yt_published) + '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
@@ -1427,8 +1556,8 @@ function viewItems() {
 }
 function tile(it) {
   const th = thumbOf(it);
-  const fresh = ASSETS.some(a => recent(it[a.k + '_link_updated_at'], 14));
-  return '<button class="tile" data-act="open" data-no="' + esc(it.item_no) + '"><span class="thumb">' + (fresh ? '<span class="newlink">Link updated</span>' : '') + (isReady(it) ? '<span class="passmark" title="Item passed">✓ Passed</span>' : '') +
+  const fresh = ASSETS.some(a => recent(it[a.k + '_link_updated_at'], 14)), flagged = ASSETS.some(a => isFlagged(it, a.k));
+  return '<button class="tile" data-act="open" data-no="' + esc(it.item_no) + '"><span class="thumb">' + (flagged ? '<span class="newlink">↻ Updated: review</span>' : fresh ? '<span class="newlink">Link updated</span>' : '') + (isReady(it) ? '<span class="passmark" title="Item passed">✓ Passed</span>' : '') +
     (th ? '<img loading="lazy" alt="" src="' + esc(th) + '" onerror="this.remove()">' : 'No image') + '</span>' +
     '<span class="tbody"><span class="tno" style="display:block">' + esc(it.item_no) + '</span><span class="tname" style="display:block">' + esc(it.name || '') + '</span>' +
     '<span class="tdots">' + ASSETS.map(a => { const e = eff(it, a.k); return '<span title="' + a.label + ': ' + e + '">' + a.short + ' <i class="dot d-' + CLS[e] + '"></i></span>'; }).join('') + '</span></span></button>';
@@ -1436,7 +1565,7 @@ function tile(it) {
 
 /* =============================== item profile =============================== */
 function navButtons(no, bar) {
-  const passed = getItem(no) && itemResult(getItem(no)).r === 'Passed';
+  const passed = getItem(no) && itemResult(getItem(no)).r === 'Passed' && !ASSETS.some(a => isFlagged(getItem(no), a.k));
   if (bar) return '<div class="navbtns mbar" role="toolbar" aria-label="Item navigation"><button class="bigbtn" data-act="prev"' + (S.qi ? '' : ' disabled') + ' aria-label="Previous item">' + ICON.prev + '</button>' +
     (canEdit() ? '<button class="bigbtn' + (passed ? ' passed' : '') + '" data-act="allgood" data-no="' + esc(no) + '">' + ICON.check + (passed ? ' Passed' : ' Passed, next') + '</button>' : '<span class="small muted mpos">' + (S.qi + 1) + ' of ' + nf(S.queue.length) + '</span>') +
     '<button class="bigbtn pri" data-act="next"' + (S.qi < S.queue.length - 1 ? '' : ' disabled') + '>Next ' + ICON.next + '</button></div>';
@@ -1445,7 +1574,7 @@ function navButtons(no, bar) {
     '<button class="bigbtn pri" data-act="next"' + (S.qi < S.queue.length - 1 ? '' : ' disabled') + '>Next ›</button></div>';
 }
 function profileSummary(it) {
-  return ASSETS.map(a => { const e = eff(it, a.k); return '<button data-act="jump" data-k="' + a.k + '"><i class="dot d-' + CLS[e] + '"></i>' + a.label + ': <b>' + esc(e) + '</b></button>'; }).join('');
+  return ASSETS.map(a => { const e = eff(it, a.k); return '<button data-act="jump" data-k="' + a.k + '"' + (isFlagged(it, a.k) ? ' class="flagged"' : '') + '><i class="dot d-' + CLS[e] + '"></i>' + a.label + ': <b>' + esc(e) + '</b>' + (isFlagged(it, a.k) ? ' · <b class="updtxt">updated</b>' : '') + '</button>'; }).join('');
 }
 function profileFacts(it) {
   const q = a => it[a + '_url'] ? esc(it[a + '_quality'] || 'quality not set') : '–';
@@ -1479,10 +1608,6 @@ function viewItem() {
     '<div class="psum" id="psum">' + profileSummary(it) + '</div></div>' +
     navButtons(it.item_no) + '</div>';
   h += '<div class="assets">' + ASSETS.map(a => '<div class="card asset" id="card-' + a.k + '">' + assetInner(it, a) + '</div>').join('') + '</div>';
-  const ex = it.extra && typeof it.extra === 'object' ? Object.entries(it.extra).filter(x => String(x[1]).trim()) : [];
-  const exShown = ex.filter(x => !DESC_KEYS.includes(x[0]));
-  if (exShown.length) h += '<div class="card"><h2 class="sec">Price list details</h2><dl class="extra">' + exShown.map(x => '<dt>' + esc(x[0]) + '</dt><dd>' + esc(x[1]) + '</dd>').join('') + '</dl></div>';
-  h += '<div class="card"><h2 class="sec">YouTube &amp; video details</h2><div class="pfacts" id="pfacts" style="margin-top:0">' + profileFacts(it) + '</div></div>';
   h += descCard(it);
   h += '<div class="card"><div class="row"><h2 class="sec grow" style="margin:0">Change history</h2><button class="sm" data-act="history" data-no="' + no + '">Show history</button></div><div id="hist"></div></div>';
   h += navButtons(it.item_no) + navButtons(it.item_no, true) + '<p class="kbd">' + (swipeOn() ? 'On a phone, a long, quick sideways swipe changes item (you can turn this off in Settings). ' : '') + 'On a laptop, use the ← → keys.</p></div>';
@@ -1517,7 +1642,8 @@ function linkUpdated(it, k) {
 function assetInner(it, a) {
   const k = a.k, url = it[k + '_url'] || '', e = eff(it, k), no = esc(it.item_no);
   let prev = '<div class="prev prev-empty">No link yet</div>';
-  if (url) {
+  if (url && k !== 'photo') prev = '';   // only photos get a preview; videos and YouTube show just the link (opens in a new tab, full size)
+  else if (url) {
     if (k === 'photo') {
       const src = photoSrc(it);
       prev = '<div class="prev">' + (src ? '<img alt="Product photo" src="' + esc(src) + '" onerror="this.outerHTML=\'<span>Preview unavailable. Use the link.</span>\'">' : '<span>No preview. Use the link.</span>') + '</div>';
@@ -1536,7 +1662,7 @@ function assetInner(it, a) {
   const st = it[k + '_status'], q = it[k + '_quality'] || '';
   const reviewed = '<span class="small muted">' + (it[k + '_reviewed_at'] ? 'Reviewed ' + day(it[k + '_reviewed_at']) + ' by ' + esc(String(it[k + '_reviewed_by']).split('@')[0]) : 'Not reviewed yet') + '</span>';
   if (!canEdit()) {
-    return '<h3>' + a.label + ' ' + chip(e) + '</h3>' + prev + meta +
+    return '<h3>' + a.label + ' ' + chip(e) + '</h3>' + updFlag(it, k) + prev + meta +
       (url ? '<div class="linkview"><a class="linkchip" target="_blank" rel="noopener" href="' + esc(url) + '">' + esc(shortUrl(url)) + ' ↗</a></div>' : '') +
       linkUpdated(it, k) +
       (url && k !== 'photo' ? '<div class="small">Quality: <b>' + esc(q || 'not set') + '</b></div>' : '') +
@@ -1567,7 +1693,7 @@ function assetInner(it, a) {
       QUALITIES.map(v => '<button data-act="quality" data-k="' + k + '" data-no="' + no + '" data-v="' + v + '" class="' + (q === v ? 'on' : '') + '">' + v + '</button>').join('') + '</span></div>' : '';
   const upl = k === 'yt' && url ? '<div class="row small noswipe"><label class="muted" for="ytpub">Uploaded on</label><input type="date" id="ytpub" data-act="set" data-no="' + no + '" data-f="yt_published" value="' + isoDay(it.yt_published) + '" style="padding:3px 6px">' +
     '<span class="muted">' + (it.yt_published ? '' : 'Look it up on YouTube so the ' + CUT.getFullYear() + ' cutoff can be checked') + '</span></div>' : '';
-  return '<h3>' + a.label + ' ' + chip(e) + '</h3>' + prev + meta + linkBlock + linkUpdated(it, k) +
+  return '<h3>' + a.label + ' ' + chip(e) + '</h3>' + updFlag(it, k) + prev + meta + linkBlock + linkUpdated(it, k) +
     (url ? '<div class="sbtns">' + STATUS_BTNS.map(s => '<button data-act="status" data-k="' + k + '" data-no="' + no + '" data-v="' + s + '" class="' + (st === s ? 'on-' + CLS[s] : '') + '">' + s + '</button>').join('') + '</div>' +
       qual + upl + '<div>' + reviewed + '</div>' +
       '<textarea class="noswipe" id="note-' + k + '" rows="2" placeholder="Note: what needs fixing" data-act="note" data-no="' + no + '" data-f="' + k + '_note">' + esc(it[k + '_note']) + '</textarea>' : '');
@@ -1729,27 +1855,52 @@ function viewTesting() {
     '<label class="picdrop" id="picdrop" style="display:block;cursor:pointer"><input type="file" id="picfile" accept="image/*" multiple hidden>' + ICON.camera + ' Choose picture(s), drop them here, or paste a screenshot</label>' +
     (S.pic ? '' : '<div style="margin-top:8px"><button class="sm" data-act="pictype">Or type / paste item numbers instead</button></div>') +
     '<div id="picout">' + picOutHtml() + '</div></div>';
-  if (S.lists.length) h += rangeCardHtml();
-  if (S.lists.length) h += '<div class="card"><h2 class="sec">Saved priority lists</h2><div class="tablewrap" style="box-shadow:none"><table><thead><tr><th>Name</th><th>Items</th><th>Fully reviewed</th><th>Saved</th><th></th></tr></thead><tbody>' +
-    S.lists.map(l => { const its = l.items.map(getItem).filter(Boolean); return '<tr><td><b>' + esc(l.name) + '</b></td><td>' + nf(l.items.length) + '</td><td>' + nf(its.filter(it => reviewProgress(it) === 'All reviewed').length) + '</td><td class="small muted">' + day(l.created_at) + (l.created_by ? ' by ' + esc(l.created_by) : '') + '</td>' +
+  const testLists = S.lists;
+  if (S.lists.some(l => !isUpdList(l))) h += rangeCardHtml();
+  if (testLists.length) h += '<div class="card"><h2 class="sec">Saved lists</h2><p class="muted small" style="margin-top:0">Testing lists and video-update lists (from Import links). Update lists download with each item\'s links, current status and what still needs review.</p><div class="tablewrap" style="box-shadow:none"><table><thead><tr><th>Name</th><th>Items</th><th>Fully reviewed</th><th>Saved</th><th></th></tr></thead><tbody>' +
+    testLists.map(l => { const its = l.items.map(getItem).filter(Boolean); return '<tr><td><b>' + esc(l.name) + '</b></td><td>' + nf(l.items.length) + '</td><td>' + nf(its.filter(it => reviewProgress(it) === 'All reviewed').length) + '</td><td class="small muted">' + day(l.created_at) + (l.created_by ? ' by ' + esc(l.created_by) : '') + '</td>' +
       '<td><button class="sm" data-act="plopen" data-id="' + l.id + '">Open in Items</button> <button class="sm" data-act="plxlsx" data-id="' + l.id + '">Download summary</button></td></tr>'; }).join('') + '</tbody></table></div></div>';
   return h + '</div>';
 }
 function viewImport() {
-  const waiting = S.items.filter(FMAP.new_links[2]).length;
-  let h = '<div class="stack">' + (waiting ? '<div class="card row"><div class="grow"><b>' + nf(waiting) + ' item(s)</b> have new links waiting for review.</div><button class="pri" data-act="reviewnew">Review them now</button></div>' : '') +
-    '<div class="card"><h2 class="sec">Load your whole spreadsheet</h2><p class="muted small" style="margin-top:0">In your Google Sheet choose <b>File → Download → Microsoft Excel (.xlsx)</b>, then pick that file here. Items, links, statuses, notes, categories and your extra price-list columns are all loaded. Empty cells never erase what is already saved, so you can load an updated copy any time.</p>' +
-    '<div class="row"><input type="file" id="wbfile" accept=".xlsx,.xls,.csv"></div><div id="wbsum"></div></div>';
-  h += '<div class="card"><h2 class="sec">1 · Master item list</h2><p class="muted small" style="margin-top:0">Upload the price sheet (Excel or CSV). It needs an item-number column; name and product-category columns are optional. New items are added and existing items get their name updated.</p>' +
-    '<div class="row"><input type="file" id="mfile" accept=".xlsx,.xls,.csv"><label class="small row"><input type="checkbox" id="moff"> Mark items that are not in this file as "not on price sheet"</label></div><div id="mmap"></div></div>';
-  h += '<div class="card"><h2 class="sec">2 · Paste links</h2><p class="muted small" style="margin-top:0">Paste links on their own, one per line. The item # is read from the file name (<code>…/video/<b>DM-0902</b>.mp4</code> → DM-0902), and <b>.mp4</b> means video while <b>.jpg / .png</b> means photo. For YouTube links, type <code>ITEM# link</code>. You can also type <code>ITEM# link</code> on a line to set it yourself. Unbranded video links look like any other video link, so choose "Unbranded videos" in the list below when pasting them.</p>' +
-    '<textarea id="paste" rows="6" placeholder="http://dominatorfireworks.com/video/DM-0902.mp4&#10;http://dominatorfireworks.com/photo/DM-0902.jpg&#10;https://www.youtube.com/watch?v=abc123xyz89&#10;DM5678  https://drive.google.com/file/d/…/view"></textarea>' +
-    '<div class="row" style="margin-top:8px">Links are <select id="ptype"><option value="auto">Auto-detect</option><option value="photo">Photos</option><option value="video">Physical videos</option><option value="ub">Unbranded videos</option><option value="yt">YouTube</option></select>' +
-    '<button data-act="parsepaste">Preview</button></div></div>';
-  h += '<div class="card"><h2 class="sec">3 · Upload a links spreadsheet</h2><p class="muted small" style="margin-top:0">Excel or CSV with one or more link columns and, if you have it, an item-number column (without one, the item # is read from each link) (for example "Photo", "Video", "Unbranded", "YouTube"). You can change how each column is used before importing.</p>' +
+  const waiting = S.items.filter(FMAP.new_links[2]).length, m = S.pmode || 'links';
+  const tl = [['video', 'Physical video'], ['yt', 'YouTube'], ['photo', 'Photo'], ['ub', 'Unbranded video']];
+  const pt = S.ptypes || { video: true };
+  let h = '<div class="stack">' + (waiting ? '<div class="card row"><div class="grow"><b>' + nf(waiting) + ' item(s)</b> have updated links waiting for review.</div><button class="pri" data-act="reviewnew">Review them now</button></div>' : '');
+  h += '<div class="card"><h2 class="sec">Paste updated links or item numbers</h2>' +
+    '<p class="muted small" style="margin-top:0">Paste what the video editor posts in the company chat. Each item is flagged <b>“Updated: please review”</b> on its card and added to a list for today. Approvals are kept as they are until someone reviews the update.</p>' +
+    '<div class="row" style="margin-bottom:8px"><span class="seg" role="group" aria-label="What are you pasting?">' +
+      '<button data-act="pmode" data-v="links" class="' + (m === 'links' ? 'on' : '') + '">Links</button><button data-act="pmode" data-v="items" class="' + (m === 'items' ? 'on' : '') + '">Item numbers</button></span></div>' +
+    (m === 'links'
+      ? '<p class="small muted" style="margin:0 0 8px">One link per line. The item # is read from the file name (<code>…/video/<b>DM-0902</b>.mp4</code> → DM-0902); <b>.mp4</b> = video, <b>.jpg / .png</b> = photo. For YouTube links put the item # first: <code>DM0902 https://youtu.be/…</code>. The same physical-video link as before is fine: it is simply flagged as updated.</p>' +
+        '<textarea id="paste" class="noswipe" rows="7" placeholder="http://dominatorfireworks.com/video/DM-0902.mp4&#10;http://dominatorfireworks.com/photo/DM-0902.jpg&#10;DM5678  https://youtu.be/abc123xyz89">' + esc(S.ptext || '') + '</textarea>' +
+        '<div class="row" style="margin-top:8px">Links are <select id="ptype"><option value="auto">Auto-detect</option><option value="photo">Photos</option><option value="video">Physical videos</option><option value="ub">Unbranded videos</option><option value="yt">YouTube</option></select>'
+      : '<p class="small muted" style="margin:0 0 8px">Item numbers in any layout: one per line, or separated by spaces or commas. Then tick what was updated.</p>' +
+        '<textarea id="paste" class="noswipe" rows="7" placeholder="DM-0902&#10;SK2165, OX2146&#10;PFX62BB-G">' + esc(S.ptext || '') + '</textarea>' +
+        '<div class="row" style="margin-top:8px"><span class="small muted">Updated:</span>' + tl.map(t => '<label class="small row"><input type="checkbox" data-act="ptypechk" data-v="' + t[0] + '"' + (pt[t[0]] ? ' checked' : '') + '> ' + t[1] + '</label>').join('')) +
+    '<button class="pri" data-act="parsepaste">Preview</button></div></div>';
+  h += '<div id="pv">' + previewHtml() + '</div>';
+  h += '<div class="card"><h2 class="sec">Upload a links spreadsheet</h2><p class="muted small" style="margin-top:0">Excel or CSV with one or more link columns (for example "Photo", "Video", "Unbranded", "YouTube") and, if you have it, an item-number column; without one, the item # is read from each link. Works the same way as pasting.</p>' +
     '<input type="file" id="lfile" accept=".xlsx,.xls,.csv"><div id="lmap"></div></div>';
-  h += '<div id="pv">' + previewHtml() + '</div></div>';
+  h += '<p class="small muted">Loading the whole Google Sheet and the master item list are now in <a href="#/settings" data-go="settings">Settings</a>.</p></div>';
   return h;
+}
+function defaultUpdName() { return new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); }
+function previewReasons() {
+  const rs = {}, nos = [];
+  S.preview.forEach(r => { const st = rowState(r); if (!st[2]) return; const it = getItem(r.item_no); if (!it) return;
+    if (!rs[it.item_no]) { rs[it.item_no] = {}; nos.push(it.item_no); } rs[it.item_no][r.type] = /^Same/.test(st[0]) ? 'Same link, video updated' : /^New/.test(st[0]) ? 'New link' : 'Link added'; });
+  return { rs: rs, nos: nos };
+}
+function parseItemNos(text, types) {
+  const out = [];
+  String(text || '').split(/[\s,;]+/).map(x => x.trim()).filter(Boolean).forEach(tok => {
+    tok = tok.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9-]+$/g, ''); if (!tok) return;
+    const no = matchItemNo(tok) || tok;
+    types.forEach(t => out.push({ item_no: no, url: '', type: t, mode: 'flag', typed: tok }));
+  });
+  const seen = {};
+  return out.filter(r => { const k = norm(r.item_no) + '|' + r.type; if (seen[k]) return false; seen[k] = 1; return true; });
 }
 let ALNUM_IDX = null, ALNUM_N = -1;
 /** Finds the tracker item for a piece of text like "DM-0902", "DM0902" or "DM0902_2" (ignores dashes, spaces and case). */
@@ -1803,6 +1954,12 @@ function linkRow(typed, url, type) {
   return { item_no: f, url: url, type: type, auto: !!f };
 }
 function rowState(r) {
+  if (r.mode === 'flag') {
+    const it0 = getItem(r.item_no);
+    if (!it0) return ['Not in the tracker. Check the item #.', 'bad', false];
+    if (!it0[r.type + '_url']) return ['No ' + ({ photo: 'photo', video: 'physical video', ub: 'unbranded video', yt: 'YouTube' })[r.type] + ' link on this item yet: add the link instead', 'bad', false];
+    return ['Same link: flagged as updated', 'warn', true];
+  }
   if (!r.url) return ['No link found', 'bad', false];
   if (!r.type) return ['Can\'t tell which asset this is. Pick a type above.', 'bad', false];
   if (!r.item_no) return ['No item # found. Type it in.', 'bad', false];
@@ -1810,8 +1967,8 @@ function rowState(r) {
   if (!it) return [(r.auto ? 'Read “' + r.item_no + '” from the link, but it' : 'That item') + ' is not in the tracker. Fix the item #.', 'bad', false];
   const cur = it[r.type + '_url'];
   const same = r.type === 'yt' ? (ytId(cur) && ytId(cur) === ytId(r.url)) : cur === r.url;
-  if (same) return ['Same as current', 'miss', false];
-  return cur ? ['Replaces current link, will need review', 'warn', true] : ['New link', 'ok', true];
+  if (same) return ['Same link: flagged as updated', 'warn', true];
+  return cur ? ['New link: flagged for review', 'warn', true] : ['Adds link: flagged for review', 'ok', true];
 }
 function previewHtml() {
   const rows = S.preview;
@@ -1819,14 +1976,16 @@ function previewHtml() {
   const st = rows.map(rowState), ok = st.filter(s => s[2]).length, auto = rows.filter(r => r.auto && getItem(r.item_no)).length;
   const tl = { photo: 'Photo', video: 'Physical video', ub: 'Unbranded video', yt: 'YouTube' };
   return '<div class="card" id="pvcard"><div class="row"><div class="grow"><h2 class="sec" style="margin:0">Preview: ' + rows.length + ' link(s), ' + ok + ' will be applied</h2>' +
-    '<div class="small muted">' + (auto ? nf(auto) + ' item number(s) were read from the link\'s file name. ' : '') + 'You can fix any item # or type below. Applied links go to the <b>New links waiting for review</b> list.</div></div>' +
-    '<button data-act="clearpv">Clear</button><button class="pri" data-act="applypv"' + (ok ? '' : ' disabled') + '>Apply ' + ok + '</button></div>' +
+    '<div class="small muted">' + (auto ? nf(auto) + ' item number(s) were read from the link\'s file name. ' : '') + 'You can fix any item # or type below. Applying flags each item “Updated: please review” and saves today\'s list.</div></div>' +
+    '<button data-act="clearpv">Clear</button></div>' +
+    '<div class="row" style="margin-top:10px"><label class="small muted" for="updname">List name</label><input type="text" id="updname" style="width:260px" value="' + esc(S.updName || defaultUpdName()) + '">' +
+    '<button class="pri" data-act="applypv"' + (ok ? '' : ' disabled') + '>Flag ' + ok + ' and save list</button><button data-act="pvxlsx"' + (ok ? '' : ' disabled') + '>Download Excel</button></div>' +
     '<datalist id="pvitems">' + S.items.map(it => '<option value="' + esc(it.item_no) + '">').join('') + '</datalist>' +
     '<div class="tablewrap" style="margin-top:10px;max-height:460px;overflow:auto;box-shadow:none"><table><thead><tr><th>Item #</th><th>Type</th><th>Link</th><th>Result</th></tr></thead><tbody>' +
     rows.slice(0, 1000).map((r, i) => '<tr><td><input type="text" class="mono" list="pvitems" style="width:130px;padding:3px 6px" data-act="pvitem" data-i="' + i + '" value="' + esc(r.item_no) + '" aria-label="Item number">' +
       (r.auto && getItem(r.item_no) ? '<div class="small muted">from link</div>' : '') + '</td>' +
       '<td><select data-act="pvtype" data-i="' + i + '" aria-label="Type">' + (r.type ? '' : '<option value="">?</option>') + Object.keys(tl).map(t => '<option value="' + t + '"' + (r.type === t ? ' selected' : '') + '>' + tl[t] + '</option>').join('') + '</select></td>' +
-      '<td style="max-width:420px;overflow:hidden;text-overflow:ellipsis"><a target="_blank" rel="noopener" href="' + esc(r.url) + '">' + esc(r.url) + '</a></td><td><span class="chip s-' + st[i][1] + '">' + esc(st[i][0]) + '</span></td></tr>').join('') +
+      '<td style="max-width:420px;overflow:hidden;text-overflow:ellipsis">' + (r.url ? '<a target="_blank" rel="noopener" href="' + esc(r.url) + '">' + esc(r.url) + '</a>' : (getItem(r.item_no) && getItem(r.item_no)[r.type + '_url'] ? '<span class="muted small">current: </span><a target="_blank" rel="noopener" href="' + esc(getItem(r.item_no)[r.type + '_url']) + '">' + esc(shortUrl(getItem(r.item_no)[r.type + '_url'])) + '</a>' : '<span class="muted">–</span>')) + '</td><td><span class="chip s-' + st[i][1] + '">' + esc(st[i][0]) + '</span></td></tr>').join('') +
     '</tbody></table></div>' + (rows.length > 1000 ? '<p class="small muted">Showing the first 1,000 rows.</p>' : '') + '</div>';
 }
 function readFileRows(file) {
@@ -1910,6 +2069,23 @@ function viewSettings() {
     [['auto', 'Auto (match device)'], ['light', 'Light'], ['dark', 'Dark']].map(o => '<button data-act="themeset" data-v="' + o[0] + '" class="' + (themeChoice() === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') +
     '</span><span class="small muted">Saved on this device. The sun/moon button at the top switches too.</span></div>' +
     '<label class="row small" style="margin-top:12px"><input type="checkbox" data-act="swipeset"' + (swipeOn() ? ' checked' : '') + '> Swipe sideways to change item on phones (only long, deliberate swipes count). Saved on this device.</label></div>';
+  if (canEdit()) {
+    h += '<div class="card"><h2 class="sec">Load your whole spreadsheet</h2><p class="muted small" style="margin-top:0">In your Google Sheet choose <b>File → Download → Microsoft Excel (.xlsx)</b>, then pick that file here. Items, links, statuses, notes, categories and descriptions are loaded (price-list columns like CBM, PKG and prices are left out). Empty cells never erase what is already saved, and links changed in the program are protected.</p>' +
+      '<div class="row"><input type="file" id="wbfile" accept=".xlsx,.xls,.csv"></div><div id="wbsum"></div></div>';
+    h += '<div class="card"><h2 class="sec">Master item list</h2><p class="muted small" style="margin-top:0">Upload the price sheet (Excel or CSV). It needs an item-number column; name and product-category columns are optional. New items are added and existing items get their name updated.</p>' +
+      '<div class="row"><input type="file" id="mfile" accept=".xlsx,.xls,.csv"><label class="small row"><input type="checkbox" id="moff"> Mark items that are not in this file as "not on price sheet"</label></div><div id="mmap"></div></div>';
+  }
+  { const lastScan = S.settings.last_scan, ping = S.settings.last_ping;
+    h += '<div class="card"><h2 class="sec">Status</h2><dl class="rules" style="margin:0">' +
+      '<dt>YouTube cutoff</dt><dd>Uploaded on or after ' + CUT.toLocaleDateString() + ' (moves forward every January 1)</dd>' +
+      '<dt>Review cycle</dt><dd>Every ' + esc(S.settings.review_months) + ' months</dd>' +
+      '<dt>Channel scan</dt><dd>' + (lastScan ? 'Last ran ' + esc(new Date(lastScan).toLocaleString()) : 'Not run yet') + '</dd>' +
+      '<dt>Keep-awake ping</dt><dd>' + (ping ? 'Last ping ' + esc(new Date(ping).toLocaleString()) : 'No ping recorded yet') + '</dd></dl></div>'; }
+  if (isAdmin()) {
+    const withPrice = S.items.filter(it => it.extra && Object.keys(it.extra).some(k => !DESC_KEYS.includes(k) && String(it.extra[k]).trim())).length;
+    if (withPrice) h += '<div class="card"><h2 class="sec">Price-list details</h2><p class="muted small" style="margin-top:0">' + nf(withPrice) + ' item(s) still have price-list details saved in the database (CBM, PKG, price list, brand…). They are no longer shown anywhere. Remove them for good; descriptions are kept.</p>' +
+      '<button data-act="cleanextras">Remove price-list details</button></div>';
+  }
   if (canEdit()) {
     h += '<div class="card"><h2 class="sec">Run now</h2><p class="muted small" style="margin-top:0">The channel scan runs by itself once a day when an editor or administrator opens the portfolio. New uploads go to YouTube review; nothing is added to an item until someone approves it.</p><div class="row">' +
       '<button data-act="job" data-fn="scanChannels">Scan channels for new videos</button>' +
@@ -2032,8 +2208,22 @@ function toWorkbook(sheets) {
   });
   return wb;
 }
+function simpleSheet(list) {
+  list = list.slice().sort((a, b) => natural(a.item_no, b.item_no));
+  const parts = [['video', 'Physical video'], ['yt', 'YouTube'], ['photo', 'Photo']];
+  const rev = (it, a) => { const e = eff(it, a); return e === 'Not needed' ? 'N/A' : e === 'Missing' ? 'No link' : reviewedA(it, a) ? 'Yes' : 'No'; };
+  const pf = (it, a) => { const e = eff(it, a); return e === 'Acceptable' || e === 'Review due' ? 'Pass' : (BAD.has(e) || e === 'Expired') ? 'Fail' : e === 'Not needed' ? 'N/A' : ''; };
+  const rows = [['Item #', 'Item name'].concat(...parts.map(x => [x[1] + ' reviewed', x[1] + ' pass/fail', x[1] + ' comments']))];
+  list.forEach(it => rows.push([it.item_no, it.name || ''].concat(...parts.map(x => [rev(it, x[0]), pf(it, x[0]), it[x[0] + '_note'] || '']))));
+  return [{ name: 'Review summary', rows: rows }];
+}
 async function doExport(kind) {
   const list = kind.endsWith('all') ? S.items.slice() : filtered();
+  if (kind.startsWith('simple')) {
+    const fn = 'Review-summary-' + (kind.endsWith('all') ? 'all' : 'this-view') + '-' + isoDay(new Date()) + '.xlsx';
+    try { XLSX.writeFile(toWorkbook(simpleSheet(list)), fn); toast('Downloading ' + esc(fn)); } catch (e) { toast('Export failed: ' + errMsg(e), 7000); }
+    return;
+  }
   const fname = 'Marketing-Portfolio-' + (kind.endsWith('all') ? 'all' : String(S.filter).replace(/[^\w-]+/g, '-') + (S.cat ? '-' + S.cat.replace(/[^\w-]+/g, '-') : '')) + '-' + isoDay(new Date());
   const sheets = exportSheets(list);
   try {
@@ -2148,9 +2338,12 @@ document.addEventListener('click', async e => {
       if (!S.wb) break;
       el.disabled = true; el.textContent = 'Loading…';
       try {
-        const r = await call('importWorkbook', S.wb, $('#wboff') && $('#wboff').checked);
+        const over = !!($('#wbover') && $('#wbover').checked);
+        if (over && !(await ask('Replace links changed in the program?', 'Links that someone changed in the program will be replaced by the spreadsheet. The current link is kept as "previous" on each item.', 'Replace them'))) { el.disabled = false; el.textContent = 'Load items'; break; }
+        const r = await call('importWorkbook', S.wb, $('#wboff') && $('#wboff').checked, over);
         S.wb = null; await reload();
-        const msg = 'Loaded ' + nf(r.items) + ' items' + (r.categories ? ' and ' + r.categories + ' categories' : '') + (r.markedOff ? '. ' + r.markedOff + ' marked off the price sheet' : '') + '.';
+        const msg = 'Loaded ' + nf(r.items) + ' items' + (r.categories ? ' and ' + r.categories + ' categories' : '') + (r.markedOff ? '. ' + r.markedOff + ' marked off the price sheet' : '') + '.' +
+          (r.kept ? ' Kept ' + nf(r.kept) + ' link(s) edited in the program.' : '') + (r.replaced ? ' Replaced ' + nf(r.replaced) + ' link(s).' : '');
         toast(msg + (S.settings.youtube_api_key ? '' : ' Next: add the YouTube API key in Settings so new channel uploads are collected for review.'), 12000);
       } catch (err) { toast(errMsg(err), 8000); el.disabled = false; el.textContent = 'Try again'; }
       break;
@@ -2201,7 +2394,7 @@ document.addEventListener('click', async e => {
       if (missing.length) { toast(esc(no) + ' can\'t pass yet: no ' + missing.map(a => PASS_LABEL[a].toLowerCase()).join(' or ') + ' link. Add it first.', 6000); break; }
       if (eff(it, 'yt') === 'Expired') { toast(esc(no) + ' can\'t pass: its YouTube video is older than the cutoff. Link a newer video first.', 6000); break; }
       const linked = PASS_ASSETS.filter(a => it[a + '_url']);
-      if (linked.some(a => eff(it, a) !== 'Acceptable')) { linked.forEach(a => { patch[a + '_status'] = 'Acceptable'; }); await save(no, patch, true); }
+      if (linked.some(a => eff(it, a) !== 'Acceptable' || isFlagged(it, a))) { linked.forEach(a => { patch[a + '_status'] = 'Acceptable'; }); await save(no, patch, true); }
       toast('✓ ' + esc(no) + ' passed');
       setTimeout(() => step(1), 450); break;
     }
@@ -2239,6 +2432,11 @@ document.addEventListener('click', async e => {
     }
     case 'togglefilters': S.showFilters = !S.showFilters; render(); break;
     case 'clearfilters': S.plist = ''; S.rfState = ''; S.filter = 'all'; S.cat = ''; S.priceOnly = true; S.keep.clear(); S.shown = 300; render(); break;
+    case 'cleanextras': {
+      if (!(await ask('Remove price-list details?', 'CBM, PKG, price list, brand and the other price-list columns are deleted from every item. Descriptions, links, statuses and notes are not touched. This cannot be undone.', 'Remove them'))) break;
+      try { const n = await call('cleanExtras'); await reload(); toast('Removed price-list details from ' + nf(n) + ' item(s).', 7000); } catch (err) { toast(errMsg(err), 7000); }
+      break;
+    }
     case 'seg': S.seg = el.dataset.v; S.shown = 300; render(); break;
     case 'toggleprice': save(no, { on_price_sheet: el.checked ? 'Yes' : 'No' }); break;
     case 'embed': {
@@ -2290,7 +2488,18 @@ document.addEventListener('click', async e => {
       } catch (err) { toast(errMsg(err), 6000); }
       break;
     }
-    case 'parsepaste': S.preview = parsePaste($('#paste').value, $('#ptype').value); $('#pv').innerHTML = previewHtml(); break;
+    case 'parsepaste': {
+      S.ptext = $('#paste').value;
+      if ((S.pmode || 'links') === 'items') {
+        const types = Object.keys(S.ptypes || { video: true }).filter(t => (S.ptypes || { video: true })[t]);
+        if (!types.length) { toast('Tick what was updated (physical video, YouTube, photo…).'); break; }
+        S.preview = parseItemNos(S.ptext, types);
+      } else S.preview = parsePaste(S.ptext, $('#ptype').value);
+      $('#pv').innerHTML = previewHtml(); if (!S.preview.length) toast('Nothing to preview yet. Paste links or item numbers first.');
+      break;
+    }
+    case 'pvxlsx': { const pr = previewReasons(); if (!pr.nos.length) { toast('Nothing to download yet.'); break; } downloadUpdates(pr.nos, (($('#updname') || {}).value || defaultUpdName()), pr.rs); break; }
+    case 'pmode': S.ptext = ($('#paste') || {}).value || ''; S.pmode = el.dataset.v; S.preview = []; render(); break;
     case 'clearpv': S.preview = []; $('#pv').innerHTML = ''; break;
     case 'logrefresh': loadUsers(); break;
     case 'logexport': {
@@ -2313,11 +2522,14 @@ document.addEventListener('click', async e => {
       const rows = S.preview.filter(r => rowState(r)[2]);
       el.disabled = true; el.textContent = 'Applying…';
       try {
-        const r = await call('importLinks', rows);
-        S.preview = []; await reload();
-        S.keep.clear(); S.rfState = ''; S.filter = 'new_links'; S.search = ''; S.priceOnly = false; if ($('#q')) $('#q').value = ''; go('items');
-        toast('Added ' + r.updated + ' link(s) to the review list' + (r.same ? ', ' + r.same + ' unchanged' : '') + (r.notFound.length ? ', ' + r.notFound.length + ' item(s) not found' : '') +
-          (r.unmatched.length ? ', ' + r.unmatched.length + ' YouTube link(s) with no item # in the title' : ''), 8000);
+        const typed = (($('#updname') || {}).value || '').trim() || defaultUpdName();
+        const name = UPD_PREFIX + typed; S.updName = '';
+        const r = await call('flagUpdates', rows, name);
+        S.preview = []; S.ptext = ''; await reload();
+        S.keep.clear(); S.rfState = ''; S.filter = 'all'; S.search = ''; if ($('#q')) $('#q').value = '';
+        S.plist = r.list ? String(r.list.id) : ''; if (!S.plist) { S.filter = 'new_links'; S.priceOnly = false; }
+        go('items');
+        toast('Flagged ' + r.items.length + ' item(s) as updated' + (r.linkChanged ? ' (' + r.linkChanged + ' new link(s))' : '') + '. ' + (r.list ? 'Saved as today\'s list.' : r.listError ? 'Could not save the list: ' + esc(r.listError) : ''), 8000);
       } catch (err) { toast(errMsg(err), 7000); el.disabled = false; }
       break;
     }
@@ -2350,6 +2562,8 @@ document.addEventListener('change', async e => {
   const el = e.target, act = el.dataset.act;
   if (act === 'setfilter') { S.keep.clear(); S.filter = el.value; S.shown = 300; render(); }
   else if (act === 'swipeset') { try { localStorage.setItem('mp_swipe', el.checked ? 'on' : 'off'); } catch (e) { /* storage blocked */ } toast(el.checked ? 'Swipe is on' : 'Swipe is off. Use the Next and Prev buttons.'); }
+  else if (el.id === 'updname') { S.updName = el.value; }
+  else if (act === 'ptypechk') { S.ptypes = Object.assign({ video: true }, S.ptypes || {}); S.ptypes[el.dataset.v] = el.checked; }
   else if (act === 'rangedays') { S.rangeDays = +el.value; const c = $('#rangecard'); if (c) c.outerHTML = rangeCardHtml(); }
   else if (act === 'rangetodo') { S.rangeTodo = el.checked; const c = $('#rangecard'); if (c) c.outerHTML = rangeCardHtml(); }
   else if (act === 'plist') { S.plist = el.value; S.keep.clear(); S.shown = 300; render(); }
@@ -2390,6 +2604,14 @@ document.addEventListener('change', async e => {
         '<div class="small muted">Columns used: ' + esc(S.wb.known.join(', ')) + '</div>' +
         (S.wb.extraCols.length ? '<div class="small muted">Kept as price-list details on each item: ' + esc(S.wb.extraCols.join(', ')) + '</div>' : '') +
         '<label class="small row"><input type="checkbox" id="wboff"> Mark items that are not in this file as "not on price sheet"</label>' +
+        (function () {
+          const pl = planWorkbook(S.wb, false), K = pl.kept, AL = { photo: 'Photo', video: 'Physical video', ub: 'Unbranded video', yt: 'YouTube' };
+          let t = '<div class="small">' + (pl.replaced ? '<b>' + nf(pl.replaced) + ' link(s)</b> will be replaced by this spreadsheet (the old link is kept as "previous" and the review starts again). ' : 'No existing links will be replaced. ') + '</div>';
+          if (K.length) t += '<div class="protectbox"><b>' + nf(K.length) + ' link(s) were changed in the program</b> and are different in this spreadsheet. <b>The program\'s links are kept.</b>' +
+            '<div class="small muted" style="margin:4px 0">' + K.slice(0, 12).map(k => esc(k.item_no) + ' (' + AL[k.asset] + ')').join(', ') + (K.length > 12 ? ' and ' + (K.length - 12) + ' more' : '') + '</div>' +
+            '<label class="small row"><input type="checkbox" id="wbover"> Let the spreadsheet replace these too</label></div>';
+          return t;
+        })() +
         '<div><button class="pri" data-act="applywb">Load ' + nf(S.wb.items.length) + ' items</button></div></div>';
     } catch (err) { $('#wbsum').innerHTML = '<p class="err">' + errMsg(err) + '</p>'; }
   }
